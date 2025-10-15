@@ -43,7 +43,7 @@
     .chip{padding:6px 10px; border-radius:999px; background:var(--badge); border:1px solid #32375a; font-size:12px; color:#c9d0e0}
     main{max-width:1100px; margin:18px auto; padding:0 16px}
 
-    /* Liste en colonne */
+    /* Liste en colonne, groupée par année */
     .list{display:flex; flex-direction:column; gap:8px}
     .year-head{margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; letter-spacing:0.3px; border-left:3px solid #2a2f4a; border-radius:6px}
     .item{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:var(--panel); border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px}
@@ -61,7 +61,8 @@
     <div class="wrap">
       <div class="row" style="justify-content:space-between">
         <div class="brand"><div class="logo"></div><div class="title">OtomeList</div></div>
-        <div class="chips"><span class="chip">Sans images</span><span class="chip">Mono-fichier</span><span class="chip">LocalStorage</span></div>
+        <!-- La section chips est optionnelle; le JS la détecte si elle existe -->
+        <div class="chips" id="chips"></div>
       </div>
       <div class="controls">
         <div class="panel">
@@ -102,7 +103,6 @@
             <summary>Diagnostics</summary>
             <pre id="tests" style="white-space:pre-wrap; color:#c9d0e0; background:#121528; padding:8px; border-radius:8px; border:1px solid #2a2f4a; max-height:240px; overflow:auto"></pre>
           </details>
-          <div class="chips" id="chips"></div>
         </div>
       </div>
     </div>
@@ -128,232 +128,195 @@
 
 <script>
 (function(){
-  const el = (sel) => document.querySelector(sel);
-  const grid = el('#list');
-  const source = el('#source');
-  const q = el('#q');
-  const typeSel = el('#typeSel');
-  const sortSel = el('#sortSel');
-  const chips = el('#chips');
-  const empty = el('#empty');
-  const testsOut = el('#tests');
-  const exportArea = el('#exportArea');
-  const exportImg = el('#exportImg');
-  const exportLink = el('#exportLink');
+  // --- Safe helpers
+  const $ = (sel) => document.querySelector(sel);
+  const on = (el,ev,fn)=> el && el.addEventListener(ev,fn);
+  const setHTML=(el,html='')=>{ if(el) el.innerHTML = html; };
+  const val=(el,fb='')=> (el && 'value' in el) ? el.value : fb;
+
+  // DOM refs
+  const grid = $('#list');
+  const source = $('#source');
+  const q = $('#q');
+  const typeSel = $('#typeSel');
+  const sortSel = $('#sortSel');
+  const chips = $('#chips');
+  const empty = $('#empty');
+  const testsOut = $('#tests');
+  const exportArea = $('#exportArea');
+  const exportImg = $('#exportImg');
+  const exportLink = $('#exportLink');
+
   const DPR = Math.max(1, window.devicePixelRatio || 1);
-
-  // Helpers
-  const on = (node, evt, fn) => node && node.addEventListener(evt, fn);
-  const val = (node, fallback='') => (node && 'value' in node) ? node.value : fallback;
-  const setHTML = (node, html='') => { if(node) node.innerHTML = html; };
-
   const STORAGE_KEY = 'animeListRaw_v1';
 
-  const SAMPLE = `isekai The Dark History of the Reincarnated Villainess 2025\nisekai The Most Heretical Last Boss Queen: From Villainess to Savior 2024`;
+  const SAMPLE = `isekai The Dark History of the Reincarnated Villainess 2025\nisekai The Most Heretical Last Boss Queen: From Villainess to Savior 2024\n[Otome] Isekai de l’héroïne réincarnée (2023)\n[Villainess] Isekai de l’héroïne réincarnée (2020)\n[Fantasy] Isekai de l’héroïne réincarnée (2023)`;
 
-  // Utilities
-  const titleCase = (s)=> s ? s.replace(/(^|\s|-|_)([a-zà-ÿ])/gi, (m, p1, p2)=> p1 + p2.toUpperCase()) : '';
+  // Utils
   const clean = (s)=> (s||'').trim().replace(/\s{2,}/g,' ');
+  const titleCase = (s)=> (s||'').replace(/(^|\s|-|_)([\p{L}\p{M}])/gu,(m,p1,p2)=>p1+p2.toUpperCase());
+  const escapeHtml = (s)=> String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
+  // Parse
   function parseLine(line){
-    if(!line) return null;
-    let m;
-    // [type] Title (2025)
-    m = line.match(/^\s*\[(.+?)\]\s*(.+?)\s*\((\d{4})\)\s*$/i);
-    if(m){ return { type:titleCase(clean(m[1])), title:clean(m[2]), year:parseInt(m[3],10) }; }
-    // type Title 2025 (last token 4 digits)
-    m = line.match(/^\s*([\p{L}0-9_-]+)\s+(.+?)\s+(\d{4})\s*$/u);
-    if(m){ return { type:titleCase(clean(m[1])), title:clean(m[2]), year:parseInt(m[3],10) }; }
-    // Title (2025) — unknown type
-    m = line.match(/^\s*(.+?)\s*\((\d{4})\)\s*$/);
-    if(m){ return { type:'Autre', title:clean(m[1]), year:parseInt(m[2],10) }; }
+    if(!line) return null; let m;
+    m = line.match(/^\s*\[(.+?)\]\s*(.+?)\s*\((\d{4})\)\s*$/u); // [type] Title (YYYY)
+    if(m) return { type:titleCase(clean(m[1])), title:clean(m[2]), year:+m[3] };
+    m = line.match(/^\s*([\p{L}\p{M}\p{N}_-]+)\s+(.+?)\s+(\d{4})\s*$/u); // type Title YYYY
+    if(m) return { type:titleCase(clean(m[1])), title:clean(m[2]), year:+m[3] };
+    m = line.match(/^\s*(.+?)\s*\((\d{4})\)\s*$/u); // Title (YYYY)
+    if(m) return { type:'Autre', title:clean(m[1]), year:+m[2] };
     return null;
   }
-
   function parseAll(text){
-    const items=[]; const errors=[];
-    (text||'').split(/\n+/).forEach((raw, idx)=>{
-      const line = raw.trim();
-      if(!line) return;
-      const it = parseLine(line);
-      if(it) items.push({...it, _line: idx+1});
-      else errors.push({ line: idx+1, raw });
-    });
+    const items=[], errors=[];
+    (text||'').split(/\n+/).forEach((raw,idx)=>{ const it=parseLine(raw.trim()); if(it) items.push({...it,_line:idx+1}); else if(raw.trim()) errors.push({line:idx+1, raw}); });
     return { items, errors };
   }
 
+  // Colors
+  function colorFor(key){ let h=0; for(let i=0;i<key.length;i++) h=(h*31 + key.charCodeAt(i))>>>0; const hue=h%360; return { bg:`hsl(${hue} 55% 20% / 0.7)`, border:`hsl(${hue} 60% 38% / 0.9)`, text:`hsl(${hue} 80% 85% / 0.98)` }; }
+  function hslToRgb(h,s,l){ h=((h%360)+360)%360; const c=(1-Math.abs(2*l-1))*s, hp=h/60, x=c*(1-Math.abs(hp%2-1)); let r=0,g=0,b=0; if(0<=hp&&hp<1){r=c;g=x;} else if(hp<2){r=x;g=c;} else if(hp<3){g=c;b=x;} else if(hp<4){g=x;b=c;} else if(hp<5){r=x;b=c;} else {r=c;b=x;} const m=l-c/2; return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)]; }
+  const rgba=(r,g,b,a)=>`rgba(${r},${g},${b},${a})`;
+  function canvasColors(key){ let h=0; for(let i=0;i<key.length;i++) h=(h*31 + key.charCodeAt(i))>>>0; const hue=h%360; const a=hslToRgb(hue,0.55,0.20), b=hslToRgb(hue,0.60,0.38), t=hslToRgb(hue,0.80,0.85); return { bg:rgba(a[0],a[1],a[2],0.7), border:rgba(b[0],b[1],b[2],0.9), text:rgba(t[0],t[1],t[2],0.98) }; }
+
+  // Render (group by year)
   function render(){
-    try{
-      const parsed = parseAll(source ? source.value : '');
-      let list = parsed.items;
-      const qv = clean(val(q)).toLowerCase();
-      if(qv){ list = list.filter(x=> x.title.toLowerCase().includes(qv)); }
-      const typeVal = val(typeSel);
-      if(typeVal){ list = list.filter(x=> x.type === typeVal); }
+    const { items } = parseAll(val(source));
+    let list = items;
+    const qv = clean(val(q)).toLowerCase(); if(qv) list = list.filter(x=> x.title.toLowerCase().includes(qv));
+    const tval = val(typeSel); if(tval) list = list.filter(x=> x.type === tval);
 
-      // sort
-      const s = val(sortSel,'yearDesc');
-      list = list.slice().sort((a,b)=>{
-        if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
-        if(s==='yearAsc') return (a.year - b.year) || a.title.localeCompare(b.title);
-        if(s==='titleAsc') return a.title.localeCompare(b.title) || (b.year - a.year);
-        if(s==='titleDesc') return b.title.localeCompare(a.title) || (b.year - a.year);
-        return 0;
-      });
-
-      setHTML(grid,'');
-      if(!list.length){ if(empty) empty.style.display='block'; return; } else { if(empty) empty.style.display='none'; }
-
-      // group by year
-      const groups = new Map();
-      list.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
-      let years = Array.from(groups.keys());
-      if(s==='yearAsc') years.sort((a,b)=>a-b); else if(s==='yearDesc') years.sort((a,b)=>b-a); else years.sort((a,b)=>b-a);
-
-      years.forEach(yv=>{
-        const head = document.createElement('div');
-        head.className = 'year-head';
-        head.textContent = yv + ' —';
-        grid.appendChild(head);
-        groups.get(yv).forEach(it=>{
-          const row = document.createElement('div');
-          row.className = 'item';
-          const { bg, border, text } = colorFor(it.type);
-          row.innerHTML = `
-            <span class="tag" style="background:${bg}; border-color:${border}; color:${text}">${escapeHtml(it.type)}</span>
-            <span class="title">${escapeHtml(it.title)}</span>
-            <span class="year">${it.year}</span>`;
-          grid.appendChild(row);
-        });
-      });
-    } catch(err){
-      console.error('Render failed', err);
-      if(grid){ grid.innerHTML = '<div class="empty">Erreur de rendu. Vérifiez les dernières modifications HTML.</div>'; }
-    }
-  
-  function escapeHtml(s){
-    return s.replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]; });
-  }
-
-  // Color utilities: deterministic soft color per type
-  function colorFor(key){
-    let h=0; for(let i=0;i<key.length;i++){ h = (h*31 + key.charCodeAt(i)) >>> 0; }
-    const hue = h % 360;
-    const bg = `hsl(${hue} 55% 20% / 0.7)`;      // DOM CSS Color 4 ok
-    const border = `hsl(${hue} 60% 38% / 0.9)`;
-    const text = `hsl(${hue} 80% 85% / 0.98)`;
-    return { bg, border, text };
-  }
-
-  // Canvas-safe colors (avoid CSS Color 4 on some engines)
-  function hslToRgb(h,s,l){
-    // h [0..360], s,l [0..1]
-    h = ((h%360)+360)%360; s = Math.max(0, Math.min(1,s)); l = Math.max(0, Math.min(1,l));
-    const c = (1 - Math.abs(2*l - 1)) * s;
-    const hp = h/60; const x = c * (1 - Math.abs((hp % 2) - 1));
-    let r=0,g=0,b=0;
-    if (0<=hp && hp<1){ r=c; g=x; b=0; }
-    else if (1<=hp && hp<2){ r=x; g=c; b=0; }
-    else if (2<=hp && hp<3){ r=0; g=c; b=x; }
-    else if (3<=hp && hp<4){ r=0; g=x; b=c; }
-    else if (4<=hp && hp<5){ r=x; g=0; b=c; }
-    else if (5<=hp && hp<6){ r=c; g=0; b=x; }
-    const m = l - c/2; r=Math.round((r+m)*255); g=Math.round((g+m)*255); b=Math.round((b+m)*255);
-    return [r,g,b];
-  }
-  function rgba(r,g,b,a){ return `rgba(${r},${g},${b},${a})`; }
-  function canvasColors(key){
-    let h=0; for(let i=0;i<key.length;i++){ h = (h*31 + key.charCodeAt(i)) >>> 0; }
-    const hue = h % 360;
-    const bgRGB = hslToRgb(hue, 0.55, 0.20);   // match DOM-ish values
-    const brdRGB = hslToRgb(hue, 0.60, 0.38);
-    const txtRGB = hslToRgb(hue, 0.80, 0.85);
-    return { bg: rgba(bgRGB[0],bgRGB[1],bgRGB[2],0.7), border: rgba(brdRGB[0],brdRGB[1],brdRGB[2],0.9), text: rgba(txtRGB[0],txtRGB[1],txtRGB[2],0.98) };
-  }
-
-  // Export current filtered list to PNG (CSP-friendly: Data URL + aperçu)
-  function exportPNG(){
-    const parsed = parseAll(source.value);
-    let list = parsed.items;
-    const qv = clean(q.value).toLowerCase();
-    if(qv){ list = list.filter(x=> x.title.toLowerCase().includes(qv)); }
-    if(typeSel.value){ list = list.filter(x=> x.type === typeSel.value); }
-    const s = sortSel.value;
+    const s = val(sortSel,'yearDesc');
     list = list.slice().sort((a,b)=>{
       if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
-      if(s==='yearAsc') return (a.year - b.year) || a.title.localeCompare(b.title);
+      if(s==='yearAsc')  return (a.year - b.year) || a.title.localeCompare(b.title);
       if(s==='titleAsc') return a.title.localeCompare(b.title) || (b.year - a.year);
-      if(s==='titleDesc') return b.title.localeCompare(a.title) || (b.year - a.year);
+      if(s==='titleDesc')return b.title.localeCompare(a.title) || (b.year - a.year);
       return 0;
-  function roundedRect(ctx, x, y, w, h, r, fill, stroke){
-    ctx.beginPath();
-    ctx.moveTo(x+r, y);
-    ctx.arcTo(x+w, y, x+w, y+h, r);
-    ctx.arcTo(x+w, y+h, x, y+h, r);
-    ctx.arcTo(x, y+h, x, y, r);
-    ctx.arcTo(x, y, x+w, y, r);
-    ctx.closePath();
-    if(fill){ ctx.fillStyle = fill; ctx.fill(); }
-    if(stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
-  }
-
-  // Events & persistence
-  function saveRaw(){ localStorage.setItem(STORAGE_KEY, source.value); }
-  function loadRaw(){ return localStorage.getItem(STORAGE_KEY) || ''; }
-
-  let deb; const debounce=function(fn){ clearTimeout(deb); deb=setTimeout(fn, 120); };
-
-  on(source,'input', function(){ clearTimeout(deb); deb=setTimeout(function(){ populateFilters(); render(); }, 120); });
-  on(q,'input', function(){ render(); });
-  on(typeSel,'change', function(){ render(); });
-  on(sortSel,'change', function(){ render(); }); });
-
-  on(document.getElementById('btn-render'),'click', render);
-  document.getElementById('btn-eg').addEventListener('click', function(){ source.value = SAMPLE; populateFilters(); render(); });
-  document.getElementById('btn-clear').addEventListener('click', function(){ source.value=''; populateFilters(); render(); });
-  document.getElementById('btn-save').addEventListener('click', function(){ saveRaw(); flash('Données sauvegardées localement.'); });
-  document.getElementById('btn-export').addEventListener('click', exportPNG);
-  document.getElementById('btn-tests').addEventListener('click', runTests);
-
-  function flash(msg){
-    const n = document.createElement('div');
-    n.textContent = msg; n.style.position='fixed'; n.style.bottom='16px'; n.style.left='50%'; n.style.transform='translateX(-50%)';
-    n.style.background='linear-gradient(180deg,#124a37,#0f3d2e)'; n.style.color='#b6ffe0'; n.style.padding='10px 14px'; n.style.borderRadius='10px'; n.style.border='1px solid #1f6e55';
-    n.style.boxShadow='0 10px 22px rgba(0,0,0,.35)'; n.style.zIndex='9999';
-    document.body.appendChild(n); setTimeout(function(){ n.remove(); }, 1600);
-  }
-
-  // ---- Tests ----
-  function runTests(){
-    const cases = [
-      { name:'type-title-year (spaces)', in:'isekai The Dark History of the Reincarnated Villainess 2025', want:{type:'Isekai', title:'The Dark History of the Reincarnated Villainess', year:2025} },
-      { name:'[type] title (year)', in:'[isekai] The Most Heretical Last Boss Queen: From Villainess to Savior (2024)', want:{type:'Isekai', title:'The Most Heretical Last Boss Queen: From Villainess to Savior', year:2024} },
-      { name:'title (year) — unknown type', in:'Only A Title (2023)', want:{type:'Autre', title:'Only A Title', year:2023} },
-      { name:'unicode type', in:'фэнтези Title 2022', want:{type:'Фэнтези', title:'Title', year:2022} },
-      { name:'dash inside title', in:'isekai A-Title With Dashes 2021', want:{type:'Isekai', title:'A-Title With Dashes', year:2021} },
-      { name:'extra spaces collapse', in:'  isekai   Spaced    Title   2020  ', want:{type:'Isekai', title:'Spaced Title', year:2020} },
-      // New edge cases
-      { name:'underscore in type', in:'slice_of_life Cozy Days 2019', want:{type:'Slice_Of_Life', title:'Cozy Days', year:2019} },
-      { name:'invalid year (3 digits) → null', in:'isekai Wrong Year 123', want:null },
-      { name:'missing year → null', in:'isekai No Year', want:null }
-    ];
-
-    let pass=0, fail=0; const lines=[];
-    cases.forEach(function(tc){
-      const got = parseLine(tc.in);
-      const ok = (tc.want===null) ? (got===null) : ( !!got && got.type===tc.want.type && got.title===tc.want.title && got.year===tc.want.year );
-      if(ok){ pass++; } else { fail++; }
-      lines.push((ok? '[PASS]':'[FAIL]') + ' ' + tc.name + '\n  in: ' + tc.in + '\n  got: ' + JSON.stringify(got) + '\n  want: ' + JSON.stringify(tc.want));
     });
 
-    if(testsOut){
-      testsOut.textContent = 'Tests: ' + pass + ' pass, ' + fail + ' fail' + '\n\n' + lines.join('\n\n');
-    }
+    setHTML(grid,'');
+    if(!list.length){ if(empty) empty.style.display='block'; return; } else { if(empty) empty.style.display='none'; }
+
+    // group by year
+    const groups = new Map();
+    list.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
+    const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? a-b : b-a);
+
+    years.forEach(yv=>{
+      const head = document.createElement('div'); head.className='year-head'; head.textContent = yv + ' —'; grid.appendChild(head);
+      groups.get(yv).forEach(it=>{
+        const row = document.createElement('div'); row.className='item'; const {bg,border,text} = colorFor(it.type);
+        row.innerHTML = `<span class="tag" style="background:${bg}; border-color:${border}; color:${text}">${escapeHtml(it.type)}</span>
+                         <span class="title">${escapeHtml(it.title)}</span>
+                         <span class="year">${it.year}</span>`;
+        grid.appendChild(row);
+      });
+    });
   }
 
+  // Filters (populate type select + optional chips)
+  function populateFilters(){
+    const { items } = parseAll(val(source));
+    const types = [...new Set(items.map(x=>x.type))].sort((a,b)=> a.localeCompare(b));
+    if(typeSel) typeSel.innerHTML = '<option value="">Tous</option>' + types.map(t=>`<option>${t}</option>`).join('');
+    if(chips) chips.innerHTML = types.map(t=>`<span class="chip">${escapeHtml(t)}</span>`).join('');
+  }
+
+  // Export PNG (mirrors the grouped layout)
+  function exportPNG(){
+    const { items } = parseAll(val(source));
+    let list = items;
+    const qv = clean(val(q)).toLowerCase(); if(qv) list = list.filter(x=> x.title.toLowerCase().includes(qv));
+    const tval = val(typeSel); if(tval) list = list.filter(x=> x.type === tval);
+    const s = val(sortSel,'yearDesc');
+    list = list.slice().sort((a,b)=>{
+      if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
+      if(s==='yearAsc')  return (a.year - b.year) || a.title.localeCompare(b.title);
+      if(s==='titleAsc') return a.title.localeCompare(b.title) || (b.year - a.year);
+      if(s==='titleDesc')return b.title.localeCompare(a.title) || (b.year - a.year);
+      return 0;
+    });
+    if(!list.length){ flash('Rien à exporter (liste vide / filtres)'); return; }
+
+    // group & dimensions
+    const groups = new Map(); list.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
+    const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? a-b : b-a);
+
+    const pad=24, rowH=42, headH=30, tagPadX=10, width=1000;
+    const totalRows = years.reduce((acc,y)=> acc + 1 + groups.get(y).length, 0);
+    const height = pad*2 + totalRows*rowH + years.length*(headH-rowH);
+
+    const canvas=document.createElement('canvas'); const ctx=canvas.getContext('2d'); if(!ctx){ flash('Canvas non supporté'); return; }
+    canvas.width=width*DPR; canvas.height=height*DPR; canvas.style.width=width+'px'; canvas.style.height=height+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+
+    // background + title
+    ctx.fillStyle='#0f1220'; ctx.fillRect(0,0,width,height);
+    ctx.fillStyle='#e6e8ef'; ctx.font='600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial'; ctx.fillText('OtomeList', pad, pad-6+18);
+
+    let y=pad+28; ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    years.forEach(yv=>{
+      ctx.fillStyle='#9aa3b2'; ctx.font='700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial'; ctx.fillText(String(yv)+' —', pad, y); y+=headH; ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      groups.get(yv).forEach(it=>{
+        const c = canvasColors(it.type); const tagText=it.type; const tw=ctx.measureText(tagText).width; const tagW=Math.ceil(tw)+tagPadX*2; const tagH=24;
+        roundedRect(ctx, pad, y-18, tagW, tagH, 12, c.bg, c.border);
+        ctx.fillStyle=c.text; ctx.fillText(tagText, pad+tagPadX, y-18+16);
+        ctx.fillStyle='#e6e8ef'; ctx.fillText(it.title, pad+tagW+12, y-18+16);
+        const year=String(it.year); const yearW=ctx.measureText(year).width; ctx.fillStyle='#9aa3b2'; ctx.fillText(year, width-pad-yearW, y-18+16);
+        y+=rowH;
+      });
+    });
+
+    const url = canvas.toDataURL('image/png');
+    if(exportArea && exportImg && exportLink){ exportImg.src=url; exportLink.href=url; exportArea.style.display='block'; try{ exportArea.scrollIntoView({behavior:'smooth'}); }catch(_){} }
+  }
+
+  function roundedRect(ctx,x,y,w,h,r,fill,stroke){
+    ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+    if(fill){ctx.fillStyle=fill;ctx.fill();} if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();}
+  }
+
+  function flash(msg){ const n=document.createElement('div'); n.textContent=msg; n.style.position='fixed'; n.style.bottom='16px'; n.style.left='50%'; n.style.transform='translateX(-50%)'; n.style.background='linear-gradient(180deg,#124a37,#0f3d2e)'; n.style.color='#b6ffe0'; n.style.padding='10px 14px'; n.style.borderRadius='10px'; n.style.border='1px solid #1f6e55'; n.style.boxShadow='0 10px 22px rgba(0,0,0,.35)'; n.style.zIndex='9999'; document.body.appendChild(n); setTimeout(()=>n.remove(),1600); }
+
+  // Tests (do not change existing, plus a couple extra)
+  function runTests(){
+    const cases = [
+      { name:'type title year', in:'isekai The Dark History of the Reincarnated Villainess 2025', want:{type:'Isekai', title:'The Dark History of the Reincarnated Villainess', year:2025} },
+      { name:'[type] title (year)', in:'[isekai] The Most Heretical Last Boss Queen: From Villainess to Savior (2024)', want:{type:'Isekai', title:'The Most Heretical Last Boss Queen: From Villainess to Savior', year:2024} },
+      { name:'title (year) — unknown type', in:'Isekai de l’héroïne réincarnée (2023)', want:{type:'Autre', title:'Isekai de l’héroïne réincarnée', year:2023} },
+      { name:'unicode type', in:'фэнтези Title 2022', want:{type:'Фэнтези', title:'Title', year:2022} },
+      { name:'dash in title', in:'isekai A-Title With Dashes 2021', want:{type:'Isekai', title:'A-Title With Dashes', year:2021} },
+      { name:'extra spaces', in:'  isekai   Spaced    Title   2020  ', want:{type:'Isekai', title:'Spaced Title', year:2020} },
+      // extra
+      { name:'underscore in type', in:'slice_of_life Cozy Days 2019', want:{type:'Slice_Of_Life', title:'Cozy Days', year:2019} },
+      { name:'brackets unicode', in:'[fantasy-épique] Un été à Tōkyō (2018)', want:{type:'Fantasy-Épique', title:'Un été à Tōkyō', year:2018} }
+    ];
+    let pass=0, fail=0; const lines=[];
+    cases.forEach(tc=>{ const got=parseLine(tc.in); const ok=!!got && got.type===tc.want.type && got.title===tc.want.title && got.year===tc.want.year; ok?pass++:fail++; lines.push((ok?'[PASS] ':'[FAIL] ')+tc.name+'\n  in: '+tc.in+'\n  got: '+JSON.stringify(got)+'\n  want: '+JSON.stringify(tc.want)); });
+    if(testsOut) testsOut.textContent = `Tests: ${pass} pass, ${fail} fail\n\n` + lines.join('\n\n');
+  }
+
+  // Persistence
+  function saveRaw(){ if(source) localStorage.setItem(STORAGE_KEY, source.value); }
+  function loadRaw(){ try{ return localStorage.getItem(STORAGE_KEY) || ''; }catch{ return ''; } }
+
+  // Events
+  let deb; const debounce=(fn)=>{ clearTimeout(deb); deb=setTimeout(fn,120); };
+  on(source,'input', ()=>debounce(()=>{ populateFilters(); render(); }));
+  on(q,'input', ()=>render());
+  on(typeSel,'change', ()=>render());
+  on(sortSel,'change', ()=>render());
+  on($('#btn-render'),'click', ()=>render());
+  on($('#btn-eg'),'click', ()=>{ if(source){ source.value=SAMPLE; populateFilters(); render(); } });
+  on($('#btn-clear'),'click', ()=>{ if(source){ source.value=''; populateFilters(); render(); } });
+  on($('#btn-save'),'click', ()=>{ saveRaw(); flash('Données sauvegardées localement.'); });
+  on($('#btn-export'),'click', ()=>exportPNG());
+  on($('#btn-tests'),'click', ()=>runTests());
+
   // Init
-  const raw = loadRaw();
-  if(raw){ source.value = raw; } else { source.value = SAMPLE; }
+  const raw = loadRaw(); if(source){ source.value = raw || source.value || SAMPLE; }
   populateFilters();
   render();
 })();
