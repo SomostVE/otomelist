@@ -45,13 +45,14 @@
 
     /* Liste en colonne */
     .list{display:flex; flex-direction:column; gap:8px}
+    .year-head{margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; letter-spacing:0.3px; border-left:3px solid #2a2f4a; border-radius:6px}
     .item{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:var(--panel); border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px}
     .item .tag{border:1px solid #32375a; border-radius:999px; padding:4px 8px; font-size:12px; color:#e6e8ef; background:#2a2f4a; transition:filter .15s ease}
     .item .tag:hover{filter:brightness(1.1)}
     .item .title{font-weight:600}
     .item .year{color:var(--muted)}
 
-    .empty{opacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:center}
+    .empty{opacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:centeropacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:center}
     footer{max-width:1100px; margin:32px auto 40px; padding:0 16px; color:var(--muted); text-align:center}
   </style>
 </head>
@@ -59,8 +60,7 @@
   <header>
     <div class="wrap">
       <div class="row" style="justify-content:space-between">
-        <div class="brand"><div class="logo"></div><div class="title">Catalogue d’anime — local</div></div>
-        <div class="chips"><span class="chip">Sans images</span><span class="chip">Mono-fichier</span><span class="chip">LocalStorage</span></div>
+        <div class="brand"><div class="logo"></div><div class="title">OtomeList</div></div>
       </div>
       <div class="controls">
         <div class="panel">
@@ -183,6 +183,47 @@
     if(qv){ list = list.filter(x=> x.title.toLowerCase().includes(qv)); }
     if(typeSel.value){ list = list.filter(x=> x.type === typeSel.value); }
 
+    // sort primary as requested
+    const s = sortSel.value;
+    list = list.slice().sort((a,b)=>{
+      if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
+      if(s==='yearAsc') return (a.year - b.year) || a.title.localeCompare(b.title);
+      if(s==='titleAsc') return a.title.localeCompare(b.title) || (b.year - a.year);
+      if(s==='titleDesc') return b.title.localeCompare(a.title) || (b.year - a.year);
+      return 0;
+    });
+
+    grid.innerHTML='';
+    if(!list.length){ empty.style.display='block'; return; } else { empty.style.display='none'; }
+
+    // group by year
+    const groups = new Map();
+    list.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
+    let years = Array.from(groups.keys());
+    if(s==='yearAsc') years.sort((a,b)=>a-b); else if(s==='yearDesc') years.sort((a,b)=>b-a); else years.sort((a,b)=>b-a);
+
+    years.forEach(yv=>{
+      const head = document.createElement('div');
+      head.className = 'year-head';
+      head.textContent = yv + ' —';
+      grid.appendChild(head);
+      groups.get(yv).forEach(it=>{
+        const row = document.createElement('div');
+        row.className = 'item';
+        const { bg, border, text } = colorFor(it.type);
+        row.innerHTML = `
+          <span class="tag" style="background:${bg}; border-color:${border}; color:${text}">${escapeHtml(it.type)}</span>
+          <span class="title">${escapeHtml(it.title)}</span>
+          <span class="year">${it.year}</span>`;
+        grid.appendChild(row);
+      });
+    });
+  } = parseAll(source.value);
+    let list = items;
+    const qv = clean(q.value).toLowerCase();
+    if(qv){ list = list.filter(x=> x.title.toLowerCase().includes(qv)); }
+    if(typeSel.value){ list = list.filter(x=> x.type === typeSel.value); }
+
     // sort
     const s = sortSel.value;
     list = list.slice().sort((a,b)=>{
@@ -266,10 +307,76 @@
     list = list.slice().sort((a,b)=>{
       if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
       if(s==='yearAsc') return (a.year - b.year) || a.title.localeCompare(b.title);
-      if(s==='titleAsc') return a.title.localeCompare(b.title);
-      if(s==='titleDesc') return b.title.localeCompare(a.title);
+      if(s==='titleAsc') return a.title.localeCompare(b.title) || (b.year - a.year);
+      if(s==='titleDesc') return b.title.localeCompare(a.title) || (b.year - a.year);
       return 0;
     });
+
+    if(list.length===0){ flash('Rien à exporter (liste vide / filtres)'); return; }
+
+    // group by year for export and compute height (add header rows)
+    const groups = new Map();
+    list.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
+    let years = Array.from(groups.keys());
+    if(s==='yearAsc') years.sort((a,b)=>a-b); else years.sort((a,b)=>b-a);
+
+    const pad = 24; const rowH = 42; const headH = 30; const tagPadX=10; const width = 1000;
+    const totalRows = years.reduce((acc,y)=> acc + 1 + groups.get(y).length, 0); // +1 for header per year
+    const height = pad*2 + totalRows*rowH + years.length*(headH-rowH);
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if(!ctx){ flash('Canvas non supporté'); return; }
+    canvas.width = width * DPR; canvas.height = height * DPR; canvas.style.width = width+'px'; canvas.style.height = height+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+
+    // background
+    ctx.fillStyle = '#0f1220'; ctx.fillRect(0,0,width,height);
+
+    // header
+    ctx.fillStyle = '#e6e8ef'; ctx.font = '600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.fillText('Liste exportée', pad, pad - 6 + 18);
+
+    let y = pad + 28;
+    ctx.font = '14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+
+    years.forEach(yv=>{
+      // Year header
+      ctx.fillStyle = '#9aa3b2';
+      ctx.font = '700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillText(String(yv) + ' —', pad, y);
+      y += headH;
+      ctx.font = '14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+
+      groups.get(yv).forEach(it=>{
+        const c = canvasColors(it.type);
+        const tagText = it.type;
+        const tw = ctx.measureText(tagText).width;
+        const tagW = Math.ceil(tw) + tagPadX*2;
+        const tagH = 24;
+        // badge
+        roundedRect(ctx, pad, y-18, tagW, tagH, 12, c.bg, c.border);
+        ctx.fillStyle = c.text; ctx.fillText(tagText, pad + tagPadX, y-18 + 16);
+        // title
+        ctx.fillStyle = '#e6e8ef';
+        ctx.fillText(it.title, pad + tagW + 12, y-18 + 16);
+        // year (right)
+        ctx.fillStyle = '#9aa3b2';
+        const year = String(it.year);
+        const yearW = ctx.measureText(year).width;
+        ctx.fillText(year, width - pad - yearW, y-18 + 16);
+        y += rowH;
+      });
+    });
+
+    try{
+      const url = canvas.toDataURL('image/png');
+      if(exportArea && exportImg && exportLink){
+        exportImg.src = url; exportLink.href = url; exportArea.style.display = 'block';
+        try{ exportArea.scrollIntoView({behavior:'smooth', block:'start'}); }catch(_){ }
+      }
+    }catch(e){ console.error(e); flash('Export PNG impossible dans ce contexte'); }
+  });
 
     if(list.length===0){ flash('Rien à exporter (liste vide / filtres)'); return; }
 
