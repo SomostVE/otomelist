@@ -142,6 +142,11 @@
   const exportLink = el('#exportLink');
   const DPR = Math.max(1, window.devicePixelRatio || 1);
 
+  // Helpers
+  const on = (node, evt, fn) => node && node.addEventListener(evt, fn);
+  const val = (node, fallback='') => (node && 'value' in node) ? node.value : fallback;
+  const setHTML = (node, html='') => { if(node) node.innerHTML = html; };
+
   const STORAGE_KEY = 'animeListRaw_v1';
 
   const SAMPLE = `isekai The Dark History of the Reincarnated Villainess 2025\nisekai The Most Heretical Last Boss Queen: From Villainess to Savior 2024`;
@@ -178,7 +183,54 @@
   }
 
   function render(){
-    const { items } = parseAll(source.value);
+    try{
+      const parsed = parseAll(source ? source.value : '');
+      let list = parsed.items;
+      const qv = clean(val(q)).toLowerCase();
+      if(qv){ list = list.filter(x=> x.title.toLowerCase().includes(qv)); }
+      const typeVal = val(typeSel);
+      if(typeVal){ list = list.filter(x=> x.type === typeVal); }
+
+      // sort
+      const s = val(sortSel,'yearDesc');
+      list = list.slice().sort((a,b)=>{
+        if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
+        if(s==='yearAsc') return (a.year - b.year) || a.title.localeCompare(b.title);
+        if(s==='titleAsc') return a.title.localeCompare(b.title) || (b.year - a.year);
+        if(s==='titleDesc') return b.title.localeCompare(a.title) || (b.year - a.year);
+        return 0;
+      });
+
+      setHTML(grid,'');
+      if(!list.length){ if(empty) empty.style.display='block'; return; } else { if(empty) empty.style.display='none'; }
+
+      // group by year
+      const groups = new Map();
+      list.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
+      let years = Array.from(groups.keys());
+      if(s==='yearAsc') years.sort((a,b)=>a-b); else if(s==='yearDesc') years.sort((a,b)=>b-a); else years.sort((a,b)=>b-a);
+
+      years.forEach(yv=>{
+        const head = document.createElement('div');
+        head.className = 'year-head';
+        head.textContent = yv + ' —';
+        grid.appendChild(head);
+        groups.get(yv).forEach(it=>{
+          const row = document.createElement('div');
+          row.className = 'item';
+          const { bg, border, text } = colorFor(it.type);
+          row.innerHTML = `
+            <span class="tag" style="background:${bg}; border-color:${border}; color:${text}">${escapeHtml(it.type)}</span>
+            <span class="title">${escapeHtml(it.title)}</span>
+            <span class="year">${it.year}</span>`;
+          grid.appendChild(row);
+        });
+      });
+    } catch(err){
+      console.error('Render failed', err);
+      if(grid){ grid.innerHTML = '<div class="empty">Erreur de rendu. Vérifiez les dernières modifications HTML.</div>'; }
+    }
+  } = parseAll(source.value);
     let list = items;
     const qv = clean(q.value).toLowerCase();
     if(qv){ list = list.filter(x=> x.title.toLowerCase().includes(qv)); }
@@ -251,7 +303,11 @@
   }
 
   function populateFilters(){
-    const { items } = parseAll(source.value);
+    const { items } = parseAll(source ? source.value : '');
+    const types = [...new Set(items.map(x=>x.type))].sort((a,b)=> a.localeCompare(b));
+    if(typeSel){ typeSel.innerHTML = '<option value="">Tous</option>' + types.map(t=>`<option>${t}</option>`).join(''); }
+    if(chips){ chips.innerHTML = types.map(t=>`<span class="chip">${t}</span>`).join(''); }
+  } = parseAll(source.value);
     const types = [...new Set(items.map(x=>x.type))].sort((a,b)=> a.localeCompare(b));
     typeSel.innerHTML = '<option value="">Tous</option>' + types.map(t=>`<option>${t}</option>`).join('');
     if(chips){ chips.innerHTML = types.map(t=>`<span class="chip">${t}</span>`).join(''); }
@@ -450,12 +506,12 @@
 
   let deb; const debounce=function(fn){ clearTimeout(deb); deb=setTimeout(fn, 120); };
 
-  source.addEventListener('input', function(){ debounce(function(){ populateFilters(); render(); }); });
-  q.addEventListener('input', function(){ render(); });
-  typeSel.addEventListener('change', function(){ render(); });
-  sortSel.addEventListener('change', function(){ render(); });
+  on(source,'input', function(){ clearTimeout(deb); deb=setTimeout(function(){ populateFilters(); render(); }, 120); });
+  on(q,'input', function(){ render(); });
+  on(typeSel,'change', function(){ render(); });
+  on(sortSel,'change', function(){ render(); }); });
 
-  document.getElementById('btn-render').addEventListener('click', render);
+  on(document.getElementById('btn-render'),'click', render);
   document.getElementById('btn-eg').addEventListener('click', function(){ source.value = SAMPLE; populateFilters(); render(); });
   document.getElementById('btn-clear').addEventListener('click', function(){ source.value=''; populateFilters(); render(); });
   document.getElementById('btn-save').addEventListener('click', function(){ saveRaw(); flash('Données sauvegardées localement.'); });
