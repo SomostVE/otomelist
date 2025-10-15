@@ -8,37 +8,64 @@
     :root{
       --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --badge:#2a2f4a;
     }
-    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
-      background:var(--bg);color:var(--text)}
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: var(--bg); color: var(--text);
+    }
     .wrap{max-width:1100px;margin:0 auto;padding:16px}
-    textarea{width:100%;min-height:140px;background:var(--panel);color:var(--text);
-      border:1px solid #2a2f4a;border-radius:12px;padding:12px}
-    .btn{border:none;border-radius:10px;padding:10px 14px;cursor:pointer;
-      background:linear-gradient(180deg,#2a2f4a,#222640);color:#e8eafb;font-weight:600}
+    h1{margin:12px 0 6px 0}
+    textarea{
+      width:100%;min-height:160px;background:var(--panel);color:var(--text);
+      border:1px solid #2a2f4a;border-radius:12px;padding:12px
+    }
+    .btn{
+      border:none;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:600;
+      background:linear-gradient(180deg,#2a2f4a,#222640);color:#e8eafb
+    }
+    .btn.ghost{background:transparent;border:1px solid #2a2f4a;color:var(--muted)}
     .list{display:flex;flex-direction:column;gap:8px;margin-top:16px}
-    .item{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;
-      background:var(--panel);border:1px solid #2a2f4a;border-radius:12px;padding:10px 12px}
-    .tag{border-radius:999px;padding:4px 8px;font-size:12px;background:var(--badge)}
+    .item{
+      display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;
+      background:var(--panel);border:1px solid #2a2f4a;border-radius:12px;padding:10px 12px
+    }
+    .tag{border-radius:999px;padding:4px 8px;font-size:12px;background:var(--badge);border:1px solid #344}
     .title{font-weight:600}
     .year{color:var(--muted)}
     #exportArea{margin-top:20px;display:none}
     #exportImg{max-width:100%;border:1px solid #2a2f4a;border-radius:10px;margin-top:8px}
+    details{margin-top:14px}
+    pre{white-space:pre-wrap;background:#121528;border:1px solid #2a2f4a;padding:8px;border-radius:8px;color:#c9d0e0}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Otomelist</h1>
-    <p>Collez vos titres ci-dessous puis exportez en image.</p>
-    <textarea id="source" placeholder="isekai The Dark History of the Reincarnated Villainess 2025"></textarea>
+    <p>Collez vos titres (format libre parmi ceux indiqués) puis exportez en image.</p>
+    <textarea id="source" placeholder="[isekai] The Dark History of the Reincarnated Villainess (2025)
+isekai The Most Heretical Last Boss Queen: From Villainess to Savior 2024
+Isekai de l’héroïne réincarnée (2023)"></textarea>
+
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" id="btn-render">Rafraîchir</button>
       <button class="btn" id="btn-export">Exporter PNG</button>
     </div>
+
     <div class="list" id="list"></div>
+
     <div id="exportArea">
       <a id="exportLink" class="btn" download="otomelist.png">Télécharger</a>
       <img id="exportImg" alt="Aperçu PNG de la liste"/>
     </div>
+
+    <details>
+      <summary>Diagnostics / tests</summary>
+      <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn ghost" id="btn-tests">Exécuter les tests</button>
+      </div>
+      <pre id="tests"></pre>
+    </details>
   </div>
 
 <script>
@@ -48,26 +75,42 @@
   const exportImg = document.getElementById('exportImg');
   const exportLink = document.getElementById('exportLink');
   const exportArea = document.getElementById('exportArea');
+  const testsOut = document.getElementById('tests');
   const DPR = Math.max(1, window.devicePixelRatio || 1);
 
   function clean(s){return (s||'').trim().replace(/\s{2,}/g,' ')}
-  function titleCase(s){return s.replace(/(^|\\s|-|_)([a-zà-ÿ])/gi,(m,p1,p2)=>p1+p2.toUpperCase())}
+  function titleCase(s){
+    // Met majuscule sur les débuts de mots (compatible accents)
+    return (s||'').replace(/(^|\s|-|_)([\p{L}\p{M}])/gu,(m,p1,p2)=>p1+p2.toUpperCase());
+  }
 
+  // === PARSEUR (Unicode-friendly) ===
+  // Accepte :
+  // 1) [type] Titre (2025)
+  // 2) type Titre 2025
+  // 3) Titre (2025)  → type = "Autre"
   function parseLine(line){
     if(!line) return null;
     let m;
-    m=line.match(/^\\s*\\[(.+?)\\]\\s*(.+?)\\s*\\((\\d{4})\\)\\s*$/i);
-    if(m) return {type:titleCase(clean(m[1])),title:clean(m[2]),year:+m[3]};
-    m=line.match(/^\\s*([\\p{L}0-9_-]+)\\s+(.+?)\\s+(\\d{4})\\s*$/u);
-    if(m) return {type:titleCase(clean(m[1])),title:clean(m[2]),year:+m[3]};
-    m=line.match(/^\\s*(.+?)\\s*\\((\\d{4})\\)\\s*$/);
-    if(m) return {type:'Autre',title:clean(m[1]),year:+m[2]};
+
+    // [type] Titre (YYYY)
+    m = line.match(/^\s*\[(.+?)\]\s*(.+?)\s*\((\d{4})\)\s*$/u);
+    if (m) return { type: titleCase(clean(m[1])), title: clean(m[2]), year: +m[3] };
+
+    // type Titre YYYY   (type = un seul mot, letters/marks/digits/_-)
+    m = line.match(/^\s*([\p{L}\p{M}\p{N}_-]+)\s+(.+?)\s+(\d{4})\s*$/u);
+    if (m) return { type: titleCase(clean(m[1])), title: clean(m[2]), year: +m[3] };
+
+    // Titre (YYYY)
+    m = line.match(/^\s*(.+?)\s*\((\d{4})\)\s*$/u);
+    if (m) return { type: 'Autre', title: clean(m[1]), year: +m[2] };
+
     return null;
   }
 
   function parseAll(text){
     const items=[];
-    (text||'').split(/\\n+/).forEach(l=>{
+    (text||'').split(/\n+/).forEach(l=>{
       const it=parseLine(l.trim());
       if(it) items.push(it);
     });
@@ -87,12 +130,16 @@
   function render(){
     const items=parseAll(source.value);
     listEl.innerHTML='';
+    if(!items.length){
+      // Pas d'alert : juste rien à lister
+      return;
+    }
     items.forEach(it=>{
       const div=document.createElement('div');
       div.className='item';
       const c=colorFor(it.type);
-      div.innerHTML=`<span class="tag" style="background:${c.bg};border:1px solid ${c.border};color:${c.text}">${it.type}</span>
-                     <span class="title">${it.title}</span>
+      div.innerHTML=`<span class="tag" style="background:${c.bg};border:1px solid ${c.border};color:${c.text}">${escapeHtml(it.type)}</span>
+                     <span class="title">${escapeHtml(it.title)}</span>
                      <span class="year">${it.year}</span>`;
       listEl.appendChild(div);
     });
@@ -100,35 +147,45 @@
 
   function exportPNG(){
     const items=parseAll(source.value);
-    if(!items.length){alert('Liste vide');return;}
+    if(!items.length){ alert('Liste vide'); return; }
+
     const pad=24,rowH=42,tagPadX=10,width=1000,height=pad*2+items.length*rowH;
     const canvas=document.createElement('canvas');
     canvas.width=width*DPR;canvas.height=height*DPR;
     const ctx=canvas.getContext('2d');ctx.setTransform(DPR,0,0,DPR,0,0);
+
+    // fond
     ctx.fillStyle='#0f1220';ctx.fillRect(0,0,width,height);
-    ctx.fillStyle='#e6e8ef';ctx.font='600 18px ui-sans-serif';ctx.fillText('Otomelist',pad,pad+18);
-    let y=pad+28;ctx.font='14px ui-sans-serif';
+    // titre
+    ctx.fillStyle='#e6e8ef';ctx.font='600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.fillText('Otomelist',pad,pad+18);
+
+    let y=pad+28;ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
     items.forEach(it=>{
       const c=colorFor(it.type);
       const tw=ctx.measureText(it.type).width;
       const tagW=Math.ceil(tw)+tagPadX*2,tagH=24;
+      // badge
       roundedRect(ctx,pad,y-18,tagW,tagH,12,c.bg,c.border);
       ctx.fillStyle=c.text;ctx.fillText(it.type,pad+tagPadX,y-18+16);
+      // titre
       ctx.fillStyle='#e6e8ef';ctx.fillText(it.title,pad+tagW+12,y-18+16);
+      // année (droite)
       const year=String(it.year);const yearW=ctx.measureText(year).width;
       ctx.fillStyle='#9aa3b2';ctx.fillText(year,width-pad-yearW,y-18+16);
       y+=rowH;
     });
+
     const url=canvas.toDataURL('image/png');
     exportImg.src=url;exportLink.href=url;exportArea.style.display='block';
-    exportArea.scrollIntoView({behavior:'smooth'});
+    try{ exportArea.scrollIntoView({behavior:'smooth', block:'start'}); }catch(_){}
   }
 
   function roundedRect(ctx,x,y,w,h,r,fill,stroke){
     ctx.beginPath();
     ctx.moveTo(x+r,y);
     ctx.arcTo(x+w,y,x+w,y+h,r);
-    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+y>0?y+h:y+h,r);
     ctx.arcTo(x,y+h,x,y,r);
     ctx.arcTo(x,y,x+w,y,r);
     ctx.closePath();
@@ -136,8 +193,37 @@
     if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();}
   }
 
+  function escapeHtml(s){
+    return String(s).replace(/[&<>\"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // Tests rapides
+  function runTests(){
+    const cases = [
+      {name:'[type] Titre (2025)', in:'[isekai] The Most Heretical Last Boss Queen: From Villainess to Savior (2024)', want:{type:'Isekai', title:'The Most Heretical Last Boss Queen: From Villainess to Savior', year:2024}},
+      {name:'type Titre 2025', in:'isekai The Dark History of the Reincarnated Villainess 2025', want:{type:'Isekai', title:'The Dark History of the Reincarnated Villainess', year:2025}},
+      {name:'Titre (2023) sans type', in:'Isekai de l’héroïne réincarnée (2023)', want:{type:'Autre', title:'Isekai de l’héroïne réincarnée', year:2023}},
+      {name:'Accents dans type', in:'fantasy-épopée Un été à Tōkyō 2018', want:{type:'Fantasy-Épopée', title:'Un été à Tōkyō', year:2018}},
+      {name:'Underscore dans type', in:'slice_of_life Douceur de vivre 2019', want:{type:'Slice_Of_Life', title:'Douceur de vivre', year:2019}}
+    ];
+    let pass=0, fail=0; const lines=[];
+    cases.forEach(tc=>{
+      const got=parseLine(tc.in);
+      const ok=!!got && got.type===tc.want.type && got.title===tc.want.title && got.year===tc.want.year;
+      ok?pass++:fail++;
+      lines.push((ok?'[PASS] ':'[FAIL] ')+tc.name+'\n  in: '+tc.in+'\n  got: '+JSON.stringify(got)+'\n  want: '+JSON.stringify(tc.want));
+    });
+    if(testsOut){ testsOut.textContent = `Tests: ${pass} pass, ${fail} fail\n\n` + lines.join('\n\n'); }
+  }
+
+  // Events
   document.getElementById('btn-render').addEventListener('click',render);
   document.getElementById('btn-export').addEventListener('click',exportPNG);
+  document.getElementById('btn-tests').addEventListener('click',runTests);
+
+  // Init (remplissage d'exemple)
+  source.value = source.getAttribute('placeholder') || '';
+  render();
 })();
 </script>
 </body>
