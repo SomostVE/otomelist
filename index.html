@@ -3,226 +3,397 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Otomelist — Catalogue d’anime</title>
+  <title>Catalogue d’anime — Local</title>
   <style>
     :root{
-      --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --badge:#2a2f4a;
+      --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --brand:#7c5cff; --badge:#2a2f4a;
+      --ok:#19c37d; --warn:#ffb020;
     }
     *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background: var(--bg); color: var(--text);
-    }
-    .wrap{max-width:1100px;margin:0 auto;padding:16px}
-    h1{margin:12px 0 6px 0}
-    textarea{
-      width:100%;min-height:160px;background:var(--panel);color:var(--text);
-      border:1px solid #2a2f4a;border-radius:12px;padding:12px
-    }
-    .btn{
-      border:none;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:600;
-      background:linear-gradient(180deg,#2a2f4a,#222640);color:#e8eafb
-    }
-    .btn.ghost{background:transparent;border:1px solid #2a2f4a;color:var(--muted)}
-    .list{display:flex;flex-direction:column;gap:8px;margin-top:16px}
-    .item{
-      display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;
-      background:var(--panel);border:1px solid #2a2f4a;border-radius:12px;padding:10px 12px
-    }
-    .tag{border-radius:999px;padding:4px 8px;font-size:12px;background:var(--badge);border:1px solid #344}
-    .title{font-weight:600}
-    .year{color:var(--muted)}
-    #exportArea{margin-top:20px;display:none}
-    #exportImg{max-width:100%;border:1px solid #2a2f4a;border-radius:10px;margin-top:8px}
-    details{margin-top:14px}
-    pre{white-space:pre-wrap;background:#121528;border:1px solid #2a2f4a;padding:8px;border-radius:8px;color:#c9d0e0}
+    html,body{height:100%}
+    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+         background:radial-gradient(1200px 800px at 10% -10%, #1b1f36 0%, rgba(27,31,54,0) 60%),
+                    radial-gradient(1000px 700px at 110% 10%, #221b44 0%, rgba(34,27,68,0) 60%), var(--bg);
+         color:var(--text)}
+    header{position:sticky; top:0; z-index:5; backdrop-filter:saturate(140%) blur(8px);
+           background:linear-gradient(180deg, rgba(15,18,32,0.9) 0%, rgba(15,18,32,0.6) 100%);
+           border-bottom:1px solid #262b44}
+    .wrap{max-width:1100px; margin:0 auto; padding:16px}
+    .brand{display:flex; gap:10px; align-items:center}
+    .logo{width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg, var(--brand), #00e7ff)}
+    .title{font-weight:700; letter-spacing:0.3px}
+    .controls{display:grid; grid-template-columns: 1fr; gap:12px; margin-top:12px}
+    @media (min-width: 860px){ .controls{grid-template-columns: 1.2fr 1fr} }
+    textarea{width:100%; min-height:150px; background:var(--panel); color:var(--text); border:1px solid #2a2f4a;
+             border-radius:12px; padding:12px; resize:vertical; box-shadow: inset 0 0 0 1px #1f2340}
+    .panel{background:var(--panel); border:1px solid #2a2f4a; border-radius:14px; padding:12px}
+    .row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+    .row > *{flex:1 1 auto}
+    .btn{appearance:none; border:none; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600;
+         background:linear-gradient(180deg, #2a2f4a, #222640); color:#e8eafb; box-shadow:0 6px 16px rgba(0,0,0,.25)}
+    .btn:hover{filter:brightness(1.08)}
+    .btn.ghost{background:transparent; border:1px solid #2a2f4a; color:var(--muted)}
+    .btn.warn{background:linear-gradient(180deg, #49320f, #3a2408); color:#ffd99b}
+    .btn.ok{background:linear-gradient(180deg, #124a37, #0f3d2e); color:#b6ffe0}
+    .inputs{display:grid; grid-template-columns: 1fr; gap:8px}
+    @media (min-width: 640px){ .inputs{grid-template-columns: 1fr 1fr 1fr} }
+    .input{display:flex; gap:8px; align-items:center}
+    .input input, .input select{flex:1; padding:10px 12px; border-radius:10px; border:1px solid #2a2f4a; background:#15182a; color:var(--text)}
+    .chips{display:flex; gap:8px; flex-wrap:wrap}
+    .chip{padding:6px 10px; border-radius:999px; background:var(--badge); border:1px solid #32375a; font-size:12px; color:#c9d0e0}
+    main{max-width:1100px; margin:18px auto; padding:0 16px}
+
+    /* Liste en colonne */
+    .list{display:flex; flex-direction:column; gap:8px}
+    .item{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:var(--panel); border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px}
+    .item .tag{border:1px solid #32375a; border-radius:999px; padding:4px 8px; font-size:12px; color:#e6e8ef; background:#2a2f4a; transition:filter .15s ease}
+    .item .tag:hover{filter:brightness(1.1)}
+    .item .title{font-weight:600}
+    .item .year{color:var(--muted)}
+
+    .empty{opacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:center}
+    footer{max-width:1100px; margin:32px auto 40px; padding:0 16px; color:var(--muted); text-align:center}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Otomelist</h1>
-    <p>Collez vos titres (format libre parmi ceux indiqués) puis exportez en image.</p>
-    <textarea id="source" placeholder="[isekai] The Dark History of the Reincarnated Villainess (2025)
-isekai The Most Heretical Last Boss Queen: From Villainess to Savior 2024
-Isekai de l’héroïne réincarnée (2023)"></textarea>
-
-    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn" id="btn-render">Rafraîchir</button>
-      <button class="btn" id="btn-export">Exporter PNG</button>
-    </div>
-
-    <div class="list" id="list"></div>
-
-    <div id="exportArea">
-      <a id="exportLink" class="btn" download="otomelist.png">Télécharger</a>
-      <img id="exportImg" alt="Aperçu PNG de la liste"/>
-    </div>
-
-    <details>
-      <summary>Diagnostics / tests</summary>
-      <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn ghost" id="btn-tests">Exécuter les tests</button>
+  <header>
+    <div class="wrap">
+      <div class="row" style="justify-content:space-between">
+        <div class="brand"><div class="logo"></div><div class="title">Catalogue d’anime — local</div></div>
+        <div class="chips"><span class="chip">Sans images</span><span class="chip">Mono-fichier</span><span class="chip">LocalStorage</span></div>
       </div>
-      <pre id="tests"></pre>
-    </details>
+      <div class="controls">
+        <div class="panel">
+          <div class="row" style="margin-bottom:8px; justify-content:space-between">
+            <strong>Collez votre liste</strong>
+            <div class="row" style="gap:6px; flex:0 0 auto">
+              <button class="btn ghost" id="btn-eg">Exemple</button>
+              <button class="btn warn" id="btn-clear">Vider</button>
+              <button class="btn ok" id="btn-save">Sauver</button>
+              <button class="btn" id="btn-export">Exporter PNG</button>
+              <button class="btn ghost" id="btn-tests">Tests</button>
+            </div>
+          </div>
+          <p style="opacity:.8;font-size:14px;margin-top:6px">Exemple : <code>[tag] titre (date)</code></p>
+          <textarea id="source" placeholder="Format accepté :&#10;[type] Titre (2024)&#10;ou&#10;isekai Titre 2025"></textarea>
+          <div class="inputs" style="margin-top:10px">
+            <div class="input"><label for="q" style="min-width:70px; color:var(--muted)">Recherche</label><input id="q" placeholder="Titre…"/></div>
+            <div class="input"><label for="typeSel" style="min-width:70px; color:var(--muted)">Type</label><select id="typeSel"><option value="">Tous</option></select></div>
+            <div class="input"><label for="sortSel" style="min-width:70px; color:var(--muted)">Tri</label><select id="sortSel">
+              <option value="yearDesc">Année ↓</option>
+              <option value="yearAsc">Année ↑</option>
+              <option value="titleAsc">Titre A→Z</option>
+              <option value="titleDesc">Titre Z→A</option>
+            </select></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
+            <strong>Aide rapide</strong>
+            <button class="btn ghost" id="btn-render">Rendre maintenant</button>
+          </div>
+          <ul style="margin:0 0 10px 18px; color:var(--muted); line-height:1.6">
+            <li>Formats lus : <code>[type] Nom (2025)</code> ou <code>type Nom 2025</code>.</li>
+            <li>Les données sont <em>enregistrées localement</em> (navigateur) — aucun serveur.</li>
+            <li>Coller + « Sauver » suffit pour les retrouver à la prochaine ouverture.</li>
+          </ul>
+          <details style="margin-top:8px">
+            <summary>Diagnostics</summary>
+            <pre id="tests" style="white-space:pre-wrap; color:#c9d0e0; background:#121528; padding:8px; border-radius:8px; border:1px solid #2a2f4a; max-height:240px; overflow:auto"></pre>
+          </details>
+          <div class="chips" id="chips"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="list" id="list"></section>
+    <div class="wrap"><div id="empty" class="empty" style="display:none">Aucun résultat. Modifiez les filtres ou la recherche.</div></div>
+  </main>
+
+  <div class="wrap" id="exportArea" style="display:none; margin-top:8px">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px">
+        <strong>Aperçu export</strong>
+        <a id="exportLink" class="btn" download="liste-anime.png">Télécharger</a>
+      </div>
+      <img id="exportImg" alt="Aperçu PNG de la liste" style="max-width:100%; border:1px solid #2a2f4a; border-radius:10px"/>
+      <div style="color:#9aa3b2; font-size:12px; margin-top:6px">Si le téléchargement automatique ne démarre pas, utilisez le bouton « Télécharger » ci-dessus.</div>
+    </div>
   </div>
+
+  <footer>© 2025 — Fichier local autonome. Aucun réseau, aucune image.</footer>
 
 <script>
 (function(){
-  const source = document.getElementById('source');
-  const listEl = document.getElementById('list');
-  const exportImg = document.getElementById('exportImg');
-  const exportLink = document.getElementById('exportLink');
-  const exportArea = document.getElementById('exportArea');
-  const testsOut = document.getElementById('tests');
+  const el = (sel) => document.querySelector(sel);
+  const grid = el('#list');
+  const source = el('#source');
+  const q = el('#q');
+  const typeSel = el('#typeSel');
+  const sortSel = el('#sortSel');
+  const chips = el('#chips');
+  const empty = el('#empty');
+  const testsOut = el('#tests');
+  const exportArea = el('#exportArea');
+  const exportImg = el('#exportImg');
+  const exportLink = el('#exportLink');
   const DPR = Math.max(1, window.devicePixelRatio || 1);
 
-  function clean(s){return (s||'').trim().replace(/\s{2,}/g,' ')}
-  function titleCase(s){
-    // Met majuscule sur les débuts de mots (compatible accents)
-    return (s||'').replace(/(^|\s|-|_)([\p{L}\p{M}])/gu,(m,p1,p2)=>p1+p2.toUpperCase());
-  }
+  const STORAGE_KEY = 'animeListRaw_v1';
 
-  // === PARSEUR (Unicode-friendly) ===
-  // Accepte :
-  // 1) [type] Titre (2025)
-  // 2) type Titre 2025
-  // 3) Titre (2025)  → type = "Autre"
+  const SAMPLE = `isekai The Dark History of the Reincarnated Villainess 2025\nisekai The Most Heretical Last Boss Queen: From Villainess to Savior 2024`;
+
+  // Utilities
+  const titleCase = (s)=> s ? s.replace(/(^|\s|-|_)([a-zà-ÿ])/gi, (m, p1, p2)=> p1 + p2.toUpperCase()) : '';
+  const clean = (s)=> (s||'').trim().replace(/\s{2,}/g,' ');
+
   function parseLine(line){
     if(!line) return null;
     let m;
-
-    // [type] Titre (YYYY)
-    m = line.match(/^\s*\[(.+?)\]\s*(.+?)\s*\((\d{4})\)\s*$/u);
-    if (m) return { type: titleCase(clean(m[1])), title: clean(m[2]), year: +m[3] };
-
-    // type Titre YYYY   (type = un seul mot, letters/marks/digits/_-)
-    m = line.match(/^\s*([\p{L}\p{M}\p{N}_-]+)\s+(.+?)\s+(\d{4})\s*$/u);
-    if (m) return { type: titleCase(clean(m[1])), title: clean(m[2]), year: +m[3] };
-
-    // Titre (YYYY)
-    m = line.match(/^\s*(.+?)\s*\((\d{4})\)\s*$/u);
-    if (m) return { type: 'Autre', title: clean(m[1]), year: +m[2] };
-
+    // [type] Title (2025)
+    m = line.match(/^\s*\[(.+?)\]\s*(.+?)\s*\((\d{4})\)\s*$/i);
+    if(m){ return { type:titleCase(clean(m[1])), title:clean(m[2]), year:parseInt(m[3],10) }; }
+    // type Title 2025 (last token 4 digits)
+    m = line.match(/^\s*([\p{L}0-9_-]+)\s+(.+?)\s+(\d{4})\s*$/u);
+    if(m){ return { type:titleCase(clean(m[1])), title:clean(m[2]), year:parseInt(m[3],10) }; }
+    // Title (2025) — unknown type
+    m = line.match(/^\s*(.+?)\s*\((\d{4})\)\s*$/);
+    if(m){ return { type:'Autre', title:clean(m[1]), year:parseInt(m[2],10) }; }
     return null;
   }
 
   function parseAll(text){
-    const items=[];
-    (text||'').split(/\n+/).forEach(l=>{
-      const it=parseLine(l.trim());
-      if(it) items.push(it);
+    const items=[]; const errors=[];
+    (text||'').split(/\n+/).forEach((raw, idx)=>{
+      const line = raw.trim();
+      if(!line) return;
+      const it = parseLine(line);
+      if(it) items.push({...it, _line: idx+1});
+      else errors.push({ line: idx+1, raw });
     });
-    return items;
-  }
-
-  function colorFor(key){
-    let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0;
-    const hue=h%360;
-    return {
-      bg:`hsl(${hue} 55% 20% / 0.7)`,
-      border:`hsl(${hue} 60% 38% / 0.9)`,
-      text:`hsl(${hue} 80% 85% / 0.98)`
-    };
+    return { items, errors };
   }
 
   function render(){
-    const items=parseAll(source.value);
-    listEl.innerHTML='';
-    if(!items.length){
-      // Pas d'alert : juste rien à lister
-      return;
-    }
-    items.forEach(it=>{
-      const div=document.createElement('div');
-      div.className='item';
-      const c=colorFor(it.type);
-      div.innerHTML=`<span class="tag" style="background:${c.bg};border:1px solid ${c.border};color:${c.text}">${escapeHtml(it.type)}</span>
-                     <span class="title">${escapeHtml(it.title)}</span>
-                     <span class="year">${it.year}</span>`;
-      listEl.appendChild(div);
+    const { items } = parseAll(source.value);
+    let list = items;
+    const qv = clean(q.value).toLowerCase();
+    if(qv){ list = list.filter(x=> x.title.toLowerCase().includes(qv)); }
+    if(typeSel.value){ list = list.filter(x=> x.type === typeSel.value); }
+
+    // sort
+    const s = sortSel.value;
+    list = list.slice().sort((a,b)=>{
+      if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
+      if(s==='yearAsc') return (a.year - b.year) || a.title.localeCompare(b.title);
+      if(s==='titleAsc') return a.title.localeCompare(b.title);
+      if(s==='titleDesc') return b.title.localeCompare(a.title);
+      return 0;
+    });
+
+    grid.innerHTML='';
+    if(!list.length){ empty.style.display='block'; return; } else { empty.style.display='none'; }
+
+    list.forEach(it=>{
+      const row = document.createElement('div');
+      row.className = 'item';
+      const { bg, border, text } = colorFor(it.type);
+      row.innerHTML = `
+        <span class="tag" style="background:${bg}; border-color:${border}; color:${text}">${escapeHtml(it.type)}</span>
+        <span class="title">${escapeHtml(it.title)}</span>
+        <span class="year">${it.year}</span>`;
+      grid.appendChild(row);
     });
   }
 
-  function exportPNG(){
-    const items=parseAll(source.value);
-    if(!items.length){ alert('Liste vide'); return; }
-
-    const pad=24,rowH=42,tagPadX=10,width=1000,height=pad*2+items.length*rowH;
-    const canvas=document.createElement('canvas');
-    canvas.width=width*DPR;canvas.height=height*DPR;
-    const ctx=canvas.getContext('2d');ctx.setTransform(DPR,0,0,DPR,0,0);
-
-    // fond
-    ctx.fillStyle='#0f1220';ctx.fillRect(0,0,width,height);
-    // titre
-    ctx.fillStyle='#e6e8ef';ctx.font='600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-    ctx.fillText('Otomelist',pad,pad+18);
-
-    let y=pad+28;ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-    items.forEach(it=>{
-      const c=colorFor(it.type);
-      const tw=ctx.measureText(it.type).width;
-      const tagW=Math.ceil(tw)+tagPadX*2,tagH=24;
-      // badge
-      roundedRect(ctx,pad,y-18,tagW,tagH,12,c.bg,c.border);
-      ctx.fillStyle=c.text;ctx.fillText(it.type,pad+tagPadX,y-18+16);
-      // titre
-      ctx.fillStyle='#e6e8ef';ctx.fillText(it.title,pad+tagW+12,y-18+16);
-      // année (droite)
-      const year=String(it.year);const yearW=ctx.measureText(year).width;
-      ctx.fillStyle='#9aa3b2';ctx.fillText(year,width-pad-yearW,y-18+16);
-      y+=rowH;
-    });
-
-    const url=canvas.toDataURL('image/png');
-    exportImg.src=url;exportLink.href=url;exportArea.style.display='block';
-    try{ exportArea.scrollIntoView({behavior:'smooth', block:'start'}); }catch(_){}
-  }
-
-  function roundedRect(ctx,x,y,w,h,r,fill,stroke){
-    ctx.beginPath();
-    ctx.moveTo(x+r,y);
-    ctx.arcTo(x+w,y,x+w,y+h,r);
-    ctx.arcTo(x+w,y+h,x,y+y>0?y+h:y+h,r);
-    ctx.arcTo(x,y+h,x,y,r);
-    ctx.arcTo(x,y,x+w,y,r);
-    ctx.closePath();
-    if(fill){ctx.fillStyle=fill;ctx.fill();}
-    if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();}
+  function populateFilters(){
+    const { items } = parseAll(source.value);
+    const types = [...new Set(items.map(x=>x.type))].sort((a,b)=> a.localeCompare(b));
+    typeSel.innerHTML = '<option value="">Tous</option>' + types.map(t=>`<option>${t}</option>`).join('');
+    chips.innerHTML = types.map(t=>`<span class="chip">${t}</span>`).join('');
   }
 
   function escapeHtml(s){
-    return String(s).replace(/[&<>\"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    return s.replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]; });
   }
 
-  // Tests rapides
+  // Color utilities: deterministic soft color per type
+  function colorFor(key){
+    let h=0; for(let i=0;i<key.length;i++){ h = (h*31 + key.charCodeAt(i)) >>> 0; }
+    const hue = h % 360;
+    const bg = `hsl(${hue} 55% 20% / 0.7)`;      // DOM CSS Color 4 ok
+    const border = `hsl(${hue} 60% 38% / 0.9)`;
+    const text = `hsl(${hue} 80% 85% / 0.98)`;
+    return { bg, border, text };
+  }
+
+  // Canvas-safe colors (avoid CSS Color 4 on some engines)
+  function hslToRgb(h,s,l){
+    // h [0..360], s,l [0..1]
+    h = ((h%360)+360)%360; s = Math.max(0, Math.min(1,s)); l = Math.max(0, Math.min(1,l));
+    const c = (1 - Math.abs(2*l - 1)) * s;
+    const hp = h/60; const x = c * (1 - Math.abs((hp % 2) - 1));
+    let r=0,g=0,b=0;
+    if (0<=hp && hp<1){ r=c; g=x; b=0; }
+    else if (1<=hp && hp<2){ r=x; g=c; b=0; }
+    else if (2<=hp && hp<3){ r=0; g=c; b=x; }
+    else if (3<=hp && hp<4){ r=0; g=x; b=c; }
+    else if (4<=hp && hp<5){ r=x; g=0; b=c; }
+    else if (5<=hp && hp<6){ r=c; g=0; b=x; }
+    const m = l - c/2; r=Math.round((r+m)*255); g=Math.round((g+m)*255); b=Math.round((b+m)*255);
+    return [r,g,b];
+  }
+  function rgba(r,g,b,a){ return `rgba(${r},${g},${b},${a})`; }
+  function canvasColors(key){
+    let h=0; for(let i=0;i<key.length;i++){ h = (h*31 + key.charCodeAt(i)) >>> 0; }
+    const hue = h % 360;
+    const bgRGB = hslToRgb(hue, 0.55, 0.20);   // match DOM-ish values
+    const brdRGB = hslToRgb(hue, 0.60, 0.38);
+    const txtRGB = hslToRgb(hue, 0.80, 0.85);
+    return { bg: rgba(bgRGB[0],bgRGB[1],bgRGB[2],0.7), border: rgba(brdRGB[0],brdRGB[1],brdRGB[2],0.9), text: rgba(txtRGB[0],txtRGB[1],txtRGB[2],0.98) };
+  }
+
+  // Export current filtered list to PNG (CSP-friendly: Data URL + aperçu)
+  function exportPNG(){
+    const parsed = parseAll(source.value);
+    let list = parsed.items;
+    const qv = clean(q.value).toLowerCase();
+    if(qv){ list = list.filter(x=> x.title.toLowerCase().includes(qv)); }
+    if(typeSel.value){ list = list.filter(x=> x.type === typeSel.value); }
+    const s = sortSel.value;
+    list = list.slice().sort((a,b)=>{
+      if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
+      if(s==='yearAsc') return (a.year - b.year) || a.title.localeCompare(b.title);
+      if(s==='titleAsc') return a.title.localeCompare(b.title);
+      if(s==='titleDesc') return b.title.localeCompare(a.title);
+      return 0;
+    });
+
+    if(list.length===0){ flash('Rien à exporter (liste vide / filtres)'); return; }
+
+    const pad = 24; const rowH = 42; const tagPadX=10; const width = 1000; const height = pad*2 + list.length*rowH;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if(!ctx){ flash('Canvas non supporté'); return; }
+    canvas.width = width * DPR; canvas.height = height * DPR; canvas.style.width = width+'px'; canvas.style.height = height+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+
+    // background
+    ctx.fillStyle = '#0f1220'; ctx.fillRect(0,0,width,height);
+
+    // header
+    ctx.fillStyle = '#e6e8ef'; ctx.font = '600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.fillText('Liste exportée', pad, pad - 6 + 18);
+
+    // rows
+    let y = pad + 28;
+    ctx.font = '14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    list.forEach(function(it){
+      const c = canvasColors(it.type);
+      const tagText = it.type;
+      const tw = ctx.measureText(tagText).width;
+      const tagW = Math.ceil(tw) + tagPadX*2;
+      const tagH = 24;
+
+      // badge
+      roundedRect(ctx, pad, y-18, tagW, tagH, 12, c.bg, c.border);
+      ctx.fillStyle = c.text; ctx.fillText(tagText, pad + tagPadX, y-18 + 16);
+
+      // title
+      ctx.fillStyle = '#e6e8ef';
+      ctx.fillText(it.title, pad + tagW + 12, y-18 + 16);
+
+      // year (right)
+      ctx.fillStyle = '#9aa3b2';
+      const year = String(it.year);
+      const yearW = ctx.measureText(year).width;
+      ctx.fillText(year, width - pad - yearW, y-18 + 16);
+
+      y += rowH;
+    });
+
+    try{
+      const url = canvas.toDataURL('image/png');
+      if(exportArea && exportImg && exportLink){
+        exportImg.src = url; exportLink.href = url; exportArea.style.display = 'block';
+        try{ exportArea.scrollIntoView({behavior:'smooth', block:'start'}); }catch(_){ /* noop */ }
+      }
+      // Téléchargement manuel via le bouton (plus fiable en iframe/CSP).
+    }catch(e){ console.error(e); flash('Export PNG impossible dans ce contexte'); }
+  }
+
+  function roundedRect(ctx, x, y, w, h, r, fill, stroke){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+    if(fill){ ctx.fillStyle = fill; ctx.fill(); }
+    if(stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+
+  // Events & persistence
+  function saveRaw(){ localStorage.setItem(STORAGE_KEY, source.value); }
+  function loadRaw(){ return localStorage.getItem(STORAGE_KEY) || ''; }
+
+  let deb; const debounce=function(fn){ clearTimeout(deb); deb=setTimeout(fn, 120); };
+
+  source.addEventListener('input', function(){ debounce(function(){ populateFilters(); render(); }); });
+  q.addEventListener('input', function(){ render(); });
+  typeSel.addEventListener('change', function(){ render(); });
+  sortSel.addEventListener('change', function(){ render(); });
+
+  document.getElementById('btn-render').addEventListener('click', render);
+  document.getElementById('btn-eg').addEventListener('click', function(){ source.value = SAMPLE; populateFilters(); render(); });
+  document.getElementById('btn-clear').addEventListener('click', function(){ source.value=''; populateFilters(); render(); });
+  document.getElementById('btn-save').addEventListener('click', function(){ saveRaw(); flash('Données sauvegardées localement.'); });
+  document.getElementById('btn-export').addEventListener('click', exportPNG);
+  document.getElementById('btn-tests').addEventListener('click', runTests);
+
+  function flash(msg){
+    const n = document.createElement('div');
+    n.textContent = msg; n.style.position='fixed'; n.style.bottom='16px'; n.style.left='50%'; n.style.transform='translateX(-50%)';
+    n.style.background='linear-gradient(180deg,#124a37,#0f3d2e)'; n.style.color='#b6ffe0'; n.style.padding='10px 14px'; n.style.borderRadius='10px'; n.style.border='1px solid #1f6e55';
+    n.style.boxShadow='0 10px 22px rgba(0,0,0,.35)'; n.style.zIndex='9999';
+    document.body.appendChild(n); setTimeout(function(){ n.remove(); }, 1600);
+  }
+
+  // ---- Tests ----
   function runTests(){
     const cases = [
-      {name:'[type] Titre (2025)', in:'[isekai] The Most Heretical Last Boss Queen: From Villainess to Savior (2024)', want:{type:'Isekai', title:'The Most Heretical Last Boss Queen: From Villainess to Savior', year:2024}},
-      {name:'type Titre 2025', in:'isekai The Dark History of the Reincarnated Villainess 2025', want:{type:'Isekai', title:'The Dark History of the Reincarnated Villainess', year:2025}},
-      {name:'Titre (2023) sans type', in:'Isekai de l’héroïne réincarnée (2023)', want:{type:'Autre', title:'Isekai de l’héroïne réincarnée', year:2023}},
-      {name:'Accents dans type', in:'fantasy-épopée Un été à Tōkyō 2018', want:{type:'Fantasy-Épopée', title:'Un été à Tōkyō', year:2018}},
-      {name:'Underscore dans type', in:'slice_of_life Douceur de vivre 2019', want:{type:'Slice_Of_Life', title:'Douceur de vivre', year:2019}}
+      { name:'type-title-year (spaces)', in:'isekai The Dark History of the Reincarnated Villainess 2025', want:{type:'Isekai', title:'The Dark History of the Reincarnated Villainess', year:2025} },
+      { name:'[type] title (year)', in:'[isekai] The Most Heretical Last Boss Queen: From Villainess to Savior (2024)', want:{type:'Isekai', title:'The Most Heretical Last Boss Queen: From Villainess to Savior', year:2024} },
+      { name:'title (year) — unknown type', in:'Only A Title (2023)', want:{type:'Autre', title:'Only A Title', year:2023} },
+      { name:'unicode type', in:'фэнтези Title 2022', want:{type:'Фэнтези', title:'Title', year:2022} },
+      { name:'dash inside title', in:'isekai A-Title With Dashes 2021', want:{type:'Isekai', title:'A-Title With Dashes', year:2021} },
+      { name:'extra spaces collapse', in:'  isekai   Spaced    Title   2020  ', want:{type:'Isekai', title:'Spaced Title', year:2020} },
+      // New edge cases
+      { name:'underscore in type', in:'slice_of_life Cozy Days 2019', want:{type:'Slice_Of_Life', title:'Cozy Days', year:2019} },
+      { name:'invalid year (3 digits) → null', in:'isekai Wrong Year 123', want:null },
+      { name:'missing year → null', in:'isekai No Year', want:null }
     ];
+
     let pass=0, fail=0; const lines=[];
-    cases.forEach(tc=>{
-      const got=parseLine(tc.in);
-      const ok=!!got && got.type===tc.want.type && got.title===tc.want.title && got.year===tc.want.year;
-      ok?pass++:fail++;
-      lines.push((ok?'[PASS] ':'[FAIL] ')+tc.name+'\n  in: '+tc.in+'\n  got: '+JSON.stringify(got)+'\n  want: '+JSON.stringify(tc.want));
+    cases.forEach(function(tc){
+      const got = parseLine(tc.in);
+      const ok = (tc.want===null) ? (got===null) : ( !!got && got.type===tc.want.type && got.title===tc.want.title && got.year===tc.want.year );
+      if(ok){ pass++; } else { fail++; }
+      lines.push((ok? '[PASS]':'[FAIL]') + ' ' + tc.name + '\n  in: ' + tc.in + '\n  got: ' + JSON.stringify(got) + '\n  want: ' + JSON.stringify(tc.want));
     });
-    if(testsOut){ testsOut.textContent = `Tests: ${pass} pass, ${fail} fail\n\n` + lines.join('\n\n'); }
+
+    if(testsOut){
+      testsOut.textContent = 'Tests: ' + pass + ' pass, ' + fail + ' fail' + '\n\n' + lines.join('\n\n');
+    }
   }
 
-  // Events
-  document.getElementById('btn-render').addEventListener('click',render);
-  document.getElementById('btn-export').addEventListener('click',exportPNG);
-  document.getElementById('btn-tests').addEventListener('click',runTests);
-
-  // Init (remplissage d'exemple)
-  source.value = source.getAttribute('placeholder') || '';
+  // Init
+  const raw = loadRaw();
+  if(raw){ source.value = raw; } else { source.value = SAMPLE; }
+  populateFilters();
   render();
 })();
 </script>
