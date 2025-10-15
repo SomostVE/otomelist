@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Catalogue d’anime — Local</title>
+  <title>OtomeList</title>
   <style>
     :root{
       --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --brand:#7c5cff; --badge:#2a2f4a;
@@ -61,7 +61,8 @@
     <div class="wrap">
       <div class="row" style="justify-content:space-between">
         <div class="brand"><div class="logo"></div><div class="title">OtomeList</div></div>
-      </div></div>
+        <div class="chips"><span class="chip">Sans images</span><span class="chip">Mono-fichier</span><span class="chip">LocalStorage</span></div>
+      </div>
       <div class="controls">
         <div class="panel">
           <div class="row" style="margin-bottom:8px; justify-content:space-between">
@@ -253,7 +254,7 @@
     const { items } = parseAll(source.value);
     const types = [...new Set(items.map(x=>x.type))].sort((a,b)=> a.localeCompare(b));
     typeSel.innerHTML = '<option value="">Tous</option>' + types.map(t=>`<option>${t}</option>`).join('');
-    chips.innerHTML = types.map(t=>`<span class="chip">${t}</span>`).join('');
+    if(chips){ chips.innerHTML = types.map(t=>`<span class="chip">${t}</span>`).join(''); }
   }
 
   function escapeHtml(s){
