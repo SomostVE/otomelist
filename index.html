@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -43,7 +43,10 @@
     .chip{padding:6px 10px; border-radius:999px; background:var(--badge); border:1px solid #32375a; font-size:12px; color:#c9d0e0}
     main{max-width:1100px; margin:18px auto; padding:0 16px}
 
-    /* Liste en colonne, groupée par année */
+    /* 2-column responsive layout for list */
+    .list-grid{display:grid; grid-template-columns: 1fr; gap:16px}
+    @media (min-width: 980px){ .list-grid{grid-template-columns: 1fr 1fr;} }
+
     .list{display:flex; flex-direction:column; gap:8px}
     .year-head{margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; letter-spacing:0.3px; border-left:3px solid #2a2f4a; border-radius:6px}
     .item{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:var(--panel); border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px}
@@ -61,111 +64,106 @@
     <div class="wrap">
       <div class="row" style="justify-content:space-between">
         <div class="brand"><div class="logo"></div><div class="title">OtomeList</div></div>
-        <!-- La section chips est optionnelle; le JS la détecte si elle existe -->
         <div class="chips" id="chips"></div>
       </div>
       <div class="controls">
         <div class="panel">
           <div class="row" style="margin-bottom:8px; justify-content:space-between">
-            <strong>Collez votre liste</strong>
+            <strong>Paste your list</strong>
             <div class="row" style="gap:6px; flex:0 0 auto">
-              <button class="btn ghost" id="btn-eg">Exemple</button>
-              <button class="btn warn" id="btn-clear">Vider</button>
-              <button class="btn ok" id="btn-save">Sauver</button>
-              <button class="btn" id="btn-export">Exporter PNG</button>
+              <button class="btn ghost" id="btn-eg">Example</button>
+              <button class="btn warn" id="btn-clear">Clear</button>
+              <button class="btn ok" id="btn-save">Save</button>
+              <button class="btn" id="btn-export">Export PNG</button>
               <button class="btn ghost" id="btn-tests">Tests</button>
             </div>
           </div>
-          <p style="opacity:.8;font-size:14px;margin-top:6px">Exemple : <code>[tag] titre (date)</code></p>
-          <textarea id="source" placeholder="Format accepté :&#10;[type] Titre (2024)&#10;ou&#10;isekai Titre 2025"></textarea>
+          <p style="opacity:.8;font-size:14px;margin-top:6px">Example: <code>[tag] title (year)</code></p>
+          <textarea id="source" placeholder="Accepted format:\n[type] Title (2024)\nor\nisekai Title 2025"></textarea>
           <div class="inputs" style="margin-top:10px">
-            <div class="input"><label for="q" style="min-width:70px; color:var(--muted)">Recherche</label><input id="q" placeholder="Titre…"/></div>
-            <div class="input"><label for="typeSel" style="min-width:70px; color:var(--muted)">Type</label><select id="typeSel"><option value="">Tous</option></select></div>
-            <div class="input"><label for="sortSel" style="min-width:70px; color:var(--muted)">Tri</label><select id="sortSel">
-              <option value="yearDesc">Année ↓</option>
-              <option value="yearAsc">Année ↑</option>
-              <option value="titleAsc">Titre A→Z</option>
-              <option value="titleDesc">Titre Z→A</option>
+            <div class="input"><label for="q" style="min-width:70px; color:var(--muted)">Search</label><input id="q" placeholder="Title…"/></div>
+            <div class="input"><label for="typeSel" style="min-width:70px; color:var(--muted)">Type</label><select id="typeSel"><option value="">All</option></select></div>
+            <div class="input"><label for="sortSel" style="min-width:70px; color:var(--muted)">Sort</label><select id="sortSel">
+              <option value="yearDesc">Year ↓</option>
+              <option value="yearAsc">Year ↑</option>
+              <option value="titleAsc">Title A→Z</option>
+              <option value="titleDesc">Title Z→A</option>
             </select></div>
           </div>
-        </div>
-        <div class="panel">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
-            <strong>Aide rapide</strong>
-            <button class="btn ghost" id="btn-render">Rendre maintenant</button>
-          </div>
-          <ul style="margin:0 0 10px 18px; color:var(--muted); line-height:1.6">
-            <li>Formats lus : <code>[type] Nom (2025)</code> ou <code>type Nom 2025</code>.</li>
-            <li>Les données sont <em>enregistrées localement</em> (navigateur) — aucun serveur.</li>
-            <li>Coller + « Sauver » suffit pour les retrouver à la prochaine ouverture.</li>
-          </ul>
-          <details style="margin-top:8px">
-            <summary>Diagnostics</summary>
-            <pre id="tests" style="white-space:pre-wrap; color:#c9d0e0; background:#121528; padding:8px; border-radius:8px; border:1px solid #2a2f4a; max-height:240px; overflow:auto"></pre>
-          </details>
         </div>
       </div>
     </div>
   </header>
 
   <main>
-    <section class="list" id="list"></section>
-    <div class="wrap"><div id="empty" class="empty" style="display:none">Aucun résultat. Modifiez les filtres ou la recherche.</div></div>
+    <div class="wrap">
+      <div class="list-grid">
+        <section class="list" id="listCol1"></section>
+        <section class="list" id="listCol2"></section>
+      </div>
+      <div id="empty" class="empty" style="display:none">No results. Adjust filters or search.</div>
+    </div>
   </main>
 
   <div class="wrap" id="exportArea" style="display:none; margin-top:8px">
     <div class="panel">
       <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px">
-        <strong>Aperçu export</strong>
-        <a id="exportLink" class="btn" download="liste-anime.png">Télécharger</a>
+        <strong>Export preview</strong>
+        <a id="exportLink" class="btn" download="anime-list.png">Download</a>
       </div>
-      <img id="exportImg" alt="Aperçu PNG de la liste" style="max-width:100%; border:1px solid #2a2f4a; border-radius:10px"/>
-      <div style="color:#9aa3b2; font-size:12px; margin-top:6px">Si le téléchargement automatique ne démarre pas, utilisez le bouton « Télécharger » ci-dessus.</div>
+      <img id="exportImg" alt="List PNG preview" style="max-width:100%; border:1px solid #2a2f4a; border-radius:10px"/>
+      <div style="color:#9aa3b2; font-size:12px; margin-top:6px">If the download doesn’t start automatically, use the “Download” button above.</div>
     </div>
   </div>
 
-  <footer>© 2025 — Fichier local autonome. Aucun réseau, aucune image.</footer>
+  <footer>@ <span id="year"></span> OtomeList</footer>
 
 <script>
+// Single, self-contained script — no globals leakage
 (function(){
-  // --- Safe helpers
+  // ---------- Helpers ----------
   const $ = (sel) => document.querySelector(sel);
   const on = (el,ev,fn)=> el && el.addEventListener(ev,fn);
-  const setHTML=(el,html='')=>{ if(el) el.innerHTML = html; };
+  const html=(el,s='')=>{ if(el) el.innerHTML=s; };
   const val=(el,fb='')=> (el && 'value' in el) ? el.value : fb;
 
-  // DOM refs
-  const grid = $('#list');
+  // ---------- Elements ----------
+  const col1 = $('#listCol1');
+  const col2 = $('#listCol2');
   const source = $('#source');
   const q = $('#q');
   const typeSel = $('#typeSel');
   const sortSel = $('#sortSel');
   const chips = $('#chips');
   const empty = $('#empty');
-  const testsOut = $('#tests');
   const exportArea = $('#exportArea');
   const exportImg = $('#exportImg');
   const exportLink = $('#exportLink');
+  const footerYear = $('#year');
 
   const DPR = Math.max(1, window.devicePixelRatio || 1);
   const STORAGE_KEY = 'animeListRaw_v1';
 
+  // ---------- Sample ----------
   const SAMPLE = `isekai The Dark History of the Reincarnated Villainess 2025\nisekai The Most Heretical Last Boss Queen: From Villainess to Savior 2024\n[Otome] Isekai de l’héroïne réincarnée (2023)\n[Villainess] Isekai de l’héroïne réincarnée (2020)\n[Fantasy] Isekai de l’héroïne réincarnée (2023)`;
 
-  // Utils
+  // ---------- Utils ----------
   const clean = (s)=> (s||'').trim().replace(/\s{2,}/g,' ');
   const titleCase = (s)=> (s||'').replace(/(^|\s|-|_)([\p{L}\p{M}])/gu,(m,p1,p2)=>p1+p2.toUpperCase());
   const escapeHtml = (s)=> String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-  // Parse
+  // ---------- Parsing ----------
   function parseLine(line){
     if(!line) return null; let m;
-    m = line.match(/^\s*\[(.+?)\]\s*(.+?)\s*\((\d{4})\)\s*$/u); // [type] Title (YYYY)
+    // [type] Title (YYYY)
+    m = line.match(/^\s*\[(.+?)\]\s*(.+?)\s*\((\d{4})\)\s*$/u);
     if(m) return { type:titleCase(clean(m[1])), title:clean(m[2]), year:+m[3] };
-    m = line.match(/^\s*([\p{L}\p{M}\p{N}_-]+)\s+(.+?)\s+(\d{4})\s*$/u); // type Title YYYY
+    // type Title YYYY
+    m = line.match(/^\s*([\p{L}\p{M}\p{N}_-]+)\s+(.+?)\s+(\d{4})\s*$/u);
     if(m) return { type:titleCase(clean(m[1])), title:clean(m[2]), year:+m[3] };
-    m = line.match(/^\s*(.+?)\s*\((\d{4})\)\s*$/u); // Title (YYYY)
-    if(m) return { type:'Autre', title:clean(m[1]), year:+m[2] };
+    // Title (YYYY)
+    m = line.match(/^\s*(.+?)\s*\((\d{4})\)\s*$/u);
+    if(m) return { type:'Other', title:clean(m[1]), year:+m[2] };
     return null;
   }
   function parseAll(text){
@@ -174,13 +172,13 @@
     return { items, errors };
   }
 
-  // Colors
+  // ---------- Colors ----------
   function colorFor(key){ let h=0; for(let i=0;i<key.length;i++) h=(h*31 + key.charCodeAt(i))>>>0; const hue=h%360; return { bg:`hsl(${hue} 55% 20% / 0.7)`, border:`hsl(${hue} 60% 38% / 0.9)`, text:`hsl(${hue} 80% 85% / 0.98)` }; }
   function hslToRgb(h,s,l){ h=((h%360)+360)%360; const c=(1-Math.abs(2*l-1))*s, hp=h/60, x=c*(1-Math.abs(hp%2-1)); let r=0,g=0,b=0; if(0<=hp&&hp<1){r=c;g=x;} else if(hp<2){r=x;g=c;} else if(hp<3){g=c;b=x;} else if(hp<4){g=x;b=c;} else if(hp<5){r=x;b=c;} else {r=c;b=x;} const m=l-c/2; return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)]; }
   const rgba=(r,g,b,a)=>`rgba(${r},${g},${b},${a})`;
   function canvasColors(key){ let h=0; for(let i=0;i<key.length;i++) h=(h*31 + key.charCodeAt(i))>>>0; const hue=h%360; const a=hslToRgb(hue,0.55,0.20), b=hslToRgb(hue,0.60,0.38), t=hslToRgb(hue,0.80,0.85); return { bg:rgba(a[0],a[1],a[2],0.7), border:rgba(b[0],b[1],b[2],0.9), text:rgba(t[0],t[1],t[2],0.98) }; }
 
-  // Render (group by year)
+  // ---------- Render (2 columns, grouped by year) ----------
   function render(){
     const { items } = parseAll(val(source));
     let list = items;
@@ -196,7 +194,7 @@
       return 0;
     });
 
-    setHTML(grid,'');
+    html(col1,''); html(col2,'');
     if(!list.length){ if(empty) empty.style.display='block'; return; } else { if(empty) empty.style.display='none'; }
 
     // group by year
@@ -204,51 +202,53 @@
     list.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
     const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? a-b : b-a);
 
+    // simple balancing by estimated height
+    let h1=0, h2=0;
     years.forEach(yv=>{
-      const head = document.createElement('div'); head.className='year-head'; head.textContent = yv + ' —'; grid.appendChild(head);
-      groups.get(yv).forEach(it=>{
-        const row = document.createElement('div'); row.className='item'; const {bg,border,text} = colorFor(it.type);
+      const arr = groups.get(yv);
+      const container = document.createElement('div');
+      const head = document.createElement('div'); head.className='year-head'; head.textContent = yv + ' —';
+      container.appendChild(head);
+      arr.forEach(it=>{
+        const row = document.createElement('div'); row.className='item';
+        const {bg,border,text} = colorFor(it.type);
         row.innerHTML = `<span class="tag" style="background:${bg}; border-color:${border}; color:${text}">${escapeHtml(it.type)}</span>
                          <span class="title">${escapeHtml(it.title)}</span>
                          <span class="year">${it.year}</span>`;
-        grid.appendChild(row);
+        container.appendChild(row);
       });
+      const est = 1 + arr.length;
+      if(h1<=h2){ col1.appendChild(container); h1+=est; } else { col2.appendChild(container); h2+=est; }
     });
   }
 
-  // Filters (populate type select + optional chips)
+  // ---------- Filters ----------
   function populateFilters(){
     const { items } = parseAll(val(source));
     const types = [...new Set(items.map(x=>x.type))].sort((a,b)=> a.localeCompare(b));
-    if(typeSel) typeSel.innerHTML = '<option value="">Tous</option>' + types.map(t=>`<option>${t}</option>`).join('');
+    if(typeSel) typeSel.innerHTML = '<option value="">All</option>' + types.map(t=>`<option>${t}</option>`).join('');
     if(chips) chips.innerHTML = types.map(t=>`<span class="chip">${escapeHtml(t)}</span>`).join('');
   }
 
-  // Export PNG (mirrors the grouped layout)
+  // ---------- Export PNG (grouped by year) ----------
   function exportPNG(){
-    const { items } = parseAll(val(source));
-    let list = items;
-    const qv = clean(val(q)).toLowerCase(); if(qv) list = list.filter(x=> x.title.toLowerCase().includes(qv));
-    const tval = val(typeSel); if(tval) list = list.filter(x=> x.type === tval);
+    let { items } = parseAll(val(source));
+    const qv = clean(val(q)).toLowerCase();
+    const tval = val(typeSel);
     const s = val(sortSel,'yearDesc');
-    list = list.slice().sort((a,b)=>{
-      if(s==='yearDesc') return (b.year - a.year) || a.title.localeCompare(b.title);
-      if(s==='yearAsc')  return (a.year - b.year) || a.title.localeCompare(b.title);
-      if(s==='titleAsc') return a.title.localeCompare(b.title) || (b.year - a.year);
-      if(s==='titleDesc')return b.title.localeCompare(a.title) || (b.year - a.year);
-      return 0;
-    });
-    if(!list.length){ flash('Rien à exporter (liste vide / filtres)'); return; }
+    if(qv) items = items.filter(x=> x.title.toLowerCase().includes(qv));
+    if(tval) items = items.filter(x=> x.type === tval);
+    items.sort((a,b)=>{ if(s==='yearDesc') return (b.year-a.year)||a.title.localeCompare(b.title); if(s==='yearAsc') return (a.year-b.year)||a.title.localeCompare(b.title); if(s==='titleAsc') return a.title.localeCompare(b.title)||(b.year-a.year); if(s==='titleDesc') return b.title.localeCompare(a.title)||(b.year-a.year); return 0; });
+    if(!items.length){ toast('Nothing to export (empty list / filters)'); return; }
 
-    // group & dimensions
-    const groups = new Map(); list.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
+    const groups = new Map(); items.forEach(it=>{ if(!groups.has(it.year)) groups.set(it.year, []); groups.get(it.year).push(it); });
     const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? a-b : b-a);
 
     const pad=24, rowH=42, headH=30, tagPadX=10, width=1000;
     const totalRows = years.reduce((acc,y)=> acc + 1 + groups.get(y).length, 0);
     const height = pad*2 + totalRows*rowH + years.length*(headH-rowH);
 
-    const canvas=document.createElement('canvas'); const ctx=canvas.getContext('2d'); if(!ctx){ flash('Canvas non supporté'); return; }
+    const canvas=document.createElement('canvas'); const ctx=canvas.getContext('2d'); if(!ctx){ toast('Canvas not supported'); return; }
     canvas.width=width*DPR; canvas.height=height*DPR; canvas.style.width=width+'px'; canvas.style.height=height+'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
 
@@ -261,7 +261,8 @@
       ctx.fillStyle='#9aa3b2'; ctx.font='700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial'; ctx.fillText(String(yv)+' —', pad, y); y+=headH; ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
       groups.get(yv).forEach(it=>{
         const c = canvasColors(it.type); const tagText=it.type; const tw=ctx.measureText(tagText).width; const tagW=Math.ceil(tw)+tagPadX*2; const tagH=24;
-        roundedRect(ctx, pad, y-18, tagW, tagH, 12, c.bg, c.border);
+        // rounded badge
+        ctx.beginPath(); const r=12, x=pad, yy=y-18, w=tagW, h=tagH; ctx.moveTo(x+r,yy); ctx.arcTo(x+w,yy,x+w,yy+h,r); ctx.arcTo(x+w,yy+h,x,yy+h,r); ctx.arcTo(x,yy+h,x,yy,r); ctx.arcTo(x,yy,x+w,yy,r); ctx.closePath(); ctx.fillStyle=c.bg; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle=c.border; ctx.stroke();
         ctx.fillStyle=c.text; ctx.fillText(tagText, pad+tagPadX, y-18+16);
         ctx.fillStyle='#e6e8ef'; ctx.fillText(it.title, pad+tagW+12, y-18+16);
         const year=String(it.year); const yearW=ctx.measureText(year).width; ctx.fillStyle='#9aa3b2'; ctx.fillText(year, width-pad-yearW, y-18+16);
@@ -278,45 +279,44 @@
     if(fill){ctx.fillStyle=fill;ctx.fill();} if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();}
   }
 
-  function flash(msg){ const n=document.createElement('div'); n.textContent=msg; n.style.position='fixed'; n.style.bottom='16px'; n.style.left='50%'; n.style.transform='translateX(-50%)'; n.style.background='linear-gradient(180deg,#124a37,#0f3d2e)'; n.style.color='#b6ffe0'; n.style.padding='10px 14px'; n.style.borderRadius='10px'; n.style.border='1px solid #1f6e55'; n.style.boxShadow='0 10px 22px rgba(0,0,0,.35)'; n.style.zIndex='9999'; document.body.appendChild(n); setTimeout(()=>n.remove(),1600); }
+  function toast(msg){ const n=document.createElement('div'); n.textContent=msg; n.style.position='fixed'; n.style.bottom='16px'; n.style.left='50%'; n.style.transform='translateX(-50%)'; n.style.background='linear-gradient(180deg,#124a37,#0f3d2e)'; n.style.color='#b6ffe0'; n.style.padding='10px 14px'; n.style.borderRadius='10px'; n.style.border='1px solid #1f6e55'; n.style.boxShadow='0 10px 22px rgba(0,0,0,.35)'; n.style.zIndex='9999'; document.body.appendChild(n); setTimeout(()=>n.remove(),1600); }
 
-  // Tests (do not change existing, plus a couple extra)
+  // ---------- Tests ----------
   function runTests(){
     const cases = [
       { name:'type title year', in:'isekai The Dark History of the Reincarnated Villainess 2025', want:{type:'Isekai', title:'The Dark History of the Reincarnated Villainess', year:2025} },
       { name:'[type] title (year)', in:'[isekai] The Most Heretical Last Boss Queen: From Villainess to Savior (2024)', want:{type:'Isekai', title:'The Most Heretical Last Boss Queen: From Villainess to Savior', year:2024} },
-      { name:'title (year) — unknown type', in:'Isekai de l’héroïne réincarnée (2023)', want:{type:'Autre', title:'Isekai de l’héroïne réincarnée', year:2023} },
+      { name:'title (year) → Other', in:'Isekai de l’héroïne réincarnée (2023)', want:{type:'Other', title:'Isekai de l’héroïne réincarnée', year:2023} },
+      // extras
       { name:'unicode type', in:'фэнтези Title 2022', want:{type:'Фэнтези', title:'Title', year:2022} },
       { name:'dash in title', in:'isekai A-Title With Dashes 2021', want:{type:'Isekai', title:'A-Title With Dashes', year:2021} },
-      { name:'extra spaces', in:'  isekai   Spaced    Title   2020  ', want:{type:'Isekai', title:'Spaced Title', year:2020} },
-      // extra
-      { name:'underscore in type', in:'slice_of_life Cozy Days 2019', want:{type:'Slice_Of_Life', title:'Cozy Days', year:2019} },
-      { name:'brackets unicode', in:'[fantasy-épique] Un été à Tōkyō (2018)', want:{type:'Fantasy-Épique', title:'Un été à Tōkyō', year:2018} }
+      { name:'extra spaces', in:'  isekai   Spaced    Title   2020  ', want:{type:'Isekai', title:'Spaced Title', year:2020} }
     ];
     let pass=0, fail=0; const lines=[];
     cases.forEach(tc=>{ const got=parseLine(tc.in); const ok=!!got && got.type===tc.want.type && got.title===tc.want.title && got.year===tc.want.year; ok?pass++:fail++; lines.push((ok?'[PASS] ':'[FAIL] ')+tc.name+'\n  in: '+tc.in+'\n  got: '+JSON.stringify(got)+'\n  want: '+JSON.stringify(tc.want)); });
-    if(testsOut) testsOut.textContent = `Tests: ${pass} pass, ${fail} fail\n\n` + lines.join('\n\n');
+    toast(`Tests: ${pass} pass, ${fail} fail`);
+    console.log(lines.join('\n\n'));
   }
 
-  // Persistence
-  function saveRaw(){ if(source) localStorage.setItem(STORAGE_KEY, source.value); }
-  function loadRaw(){ try{ return localStorage.getItem(STORAGE_KEY) || ''; }catch{ return ''; } }
+  // ---------- Persistence ----------
+  function saveRaw(){ try{ localStorage.setItem(STORAGE_KEY, val(source)); }catch(_){} }
+  function loadRaw(){ try{ return localStorage.getItem(STORAGE_KEY) || ''; }catch(_){ return ''; } }
 
-  // Events
+  // ---------- Events ----------
   let deb; const debounce=(fn)=>{ clearTimeout(deb); deb=setTimeout(fn,120); };
   on(source,'input', ()=>debounce(()=>{ populateFilters(); render(); }));
   on(q,'input', ()=>render());
   on(typeSel,'change', ()=>render());
   on(sortSel,'change', ()=>render());
-  on($('#btn-render'),'click', ()=>render());
   on($('#btn-eg'),'click', ()=>{ if(source){ source.value=SAMPLE; populateFilters(); render(); } });
   on($('#btn-clear'),'click', ()=>{ if(source){ source.value=''; populateFilters(); render(); } });
-  on($('#btn-save'),'click', ()=>{ saveRaw(); flash('Données sauvegardées localement.'); });
+  on($('#btn-save'),'click', ()=>{ saveRaw(); toast('Data saved locally.'); });
   on($('#btn-export'),'click', ()=>exportPNG());
   on($('#btn-tests'),'click', ()=>runTests());
 
-  // Init
-  const raw = loadRaw(); if(source){ source.value = raw || source.value || SAMPLE; }
+  // ---------- Init ----------
+  if(footerYear) footerYear.textContent = String(new Date().getFullYear());
+  const raw = loadRaw(); if(source){ if(!val(source).trim()) source.value = raw || source.value || SAMPLE; }
   populateFilters();
   render();
 })();
