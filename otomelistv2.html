@@ -42,9 +42,8 @@
     /* Toujours 1 colonne : preview en dessous */
     .grid{ display:grid; gap:16px; grid-template-columns: 1fr }
 
-    /* Preview */
-    .list-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px }
-    @media (max-width: 980px){ .list-grid{ grid-template-columns: 1fr } }
+    /* Preview – nb colonnes piloté par la var CSS --cols */
+    .list-grid{ display:grid; grid-template-columns: repeat(var(--cols,2), 1fr); gap:16px }
     .list{ display:flex; flex-direction:column; gap:10px }
     .year-head{ margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; border-left:3px solid #2a2f4a; border-radius:6px }
     .item{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:#151a2d; border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px }
@@ -61,6 +60,8 @@
     .switch{ display:inline-flex; gap:10px; background:#121528; border:1px solid #272c49; padding:6px; border-radius:999px }
     .switch button{ border:none; background:transparent; color:#c8cfe0; padding:6px 10px; border-radius:999px; cursor:pointer }
     .switch button.active{ background:#2a2f4a; color:#fff }
+
+    select.slim{ appearance:none; background:#121528; color:#e6e8ef; border:1px solid #2a2f4a; padding:8px 10px; border-radius:10px; font-weight:600 }
   </style>
 </head>
 <body>
@@ -102,6 +103,12 @@ https://anilist.co/manga/30002"></textarea>
               <button id="img-off">Off</button>
             </div>
           </div>
+          <div>
+            <label class="inline" style="margin-right:8px">Columns:</label>
+            <select id="colSel" class="slim">
+              <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+            </select>
+          </div>
         </div>
 
         <div style="margin-top:12px" class="row">
@@ -115,7 +122,7 @@ https://anilist.co/manga/30002"></textarea>
         <div class="row" style="justify-content:space-between; margin-bottom:8px">
           <strong>Preview</strong>
           <div class="row" style="gap:6px">
-            <select id="sortSel" class="btn" style="padding:8px 10px">
+            <select id="sortSel" class="slim">
               <option value="yearDesc">Year ↓</option>
               <option value="yearAsc">Year ↑</option>
               <option value="titleAsc">Title A→Z</option>
@@ -123,10 +130,7 @@ https://anilist.co/manga/30002"></textarea>
             </select>
           </div>
         </div>
-        <div class="list-grid">
-          <section class="list" id="col1"></section>
-          <section class="list" id="col2"></section>
-        </div>
+        <div id="cols" class="list-grid" style="--cols:3"></div>
         <div id="empty" class="empty" style="display:none; margin-top:10px">No results yet. Paste links and click Fetch.</div>
       </div>
 
@@ -153,18 +157,22 @@ https://anilist.co/manga/30002"></textarea>
 
   let TAG_MODE = 'auto';
   let SHOW_IMAGE = true;
+  let COLS = 3;              // 1..5
 
+  // Refs
   const urls = $('#urls'), btnEg = $('#btn-eg'), btnFetch = $('#btn-fetch'),
         btnExport = $('#btn-export'), btnCopy = $('#btn-copy'),
         modeAuto = $('#mode-auto'), modeNone = $('#mode-none'),
         imgOn = $('#img-on'), imgOff = $('#img-off'),
-        sortSel = $('#sortSel'), col1 = $('#col1'), col2 = $('#col2'),
+        sortSel = $('#sortSel'), colSel = $('#colSel'),
+        colsWrap = $('#cols'),
         empty = $('#empty'), exportArea = $('#exportArea'), img = $('#img'), dl = $('#dl');
 
   on(modeAuto,'click', ()=>{ TAG_MODE='auto'; modeAuto.classList.add('active'); modeNone.classList.remove('active'); render(); });
   on(modeNone,'click', ()=>{ TAG_MODE='none'; modeNone.classList.add('active'); modeAuto.classList.remove('active'); render(); });
   on(imgOn,'click', ()=>{ SHOW_IMAGE=true; imgOn.classList.add('active'); imgOff.classList.remove('active'); render(); });
   on(imgOff,'click', ()=>{ SHOW_IMAGE=false; imgOff.classList.add('active'); imgOn.classList.remove('active'); render(); });
+  on(colSel,'change', ()=>{ COLS = Math.max(1, Math.min(5, parseInt(colSel.value,10)||3)); colsWrap.style.setProperty('--cols', COLS); render(); });
 
   const API = 'https://graphql.anilist.co';
   const query = `query ($id: Int){
@@ -212,9 +220,35 @@ https://anilist.co/manga/30002"></textarea>
 
   let state=[];
 
+  // -------- Layout balancing (N colonnes) ----------
+  function buildColumns(groups, years, wantImages, nCols){
+    const thumbH = 90, rowBase = 42, headH = 30, vGap = 12;
+    const rowH = wantImages ? (thumbH + 18) : rowBase;
+
+    const cols = Array.from({length:nCols}, ()=>({blocks:[], score:0}));
+    for(const y of years){
+      const items = groups.get(y);
+      const est = 1 + items.length;      // même heuristique que le preview d’origine
+      // place le bloc dans la colonne la moins “haute”
+      let best = 0;
+      for(let i=1;i<nCols;i++) if(cols[i].score < cols[best].score) best = i;
+      cols[best].blocks.push({year:y, items});
+      cols[best].score += est;
+    }
+
+    // fonction hauteur réelle (px) d'une colonne
+    const heightOf = (c)=> c.blocks.reduce((h,b,i)=> h + (i>0?vGap:0) + headH + b.items.length*rowH, 0);
+
+    return { cols, heightOf, rowH, headH, vGap };
+  }
+
+  // --------------- PREVIEW RENDER ------------------
   function render(){
-    if(!state.length){ empty.style.display='block'; col1.innerHTML=''; col2.innerHTML=''; return; }
-    empty.style.display='none'; col1.innerHTML=''; col2.innerHTML='';
+    if(!state.length){
+      empty.style.display='block'; colsWrap.innerHTML=''; return;
+    }
+    empty.style.display='none';
+    colsWrap.innerHTML=''; colsWrap.style.setProperty('--cols', COLS);
 
     const s = sortSel.value || 'yearDesc';
     const items = state.slice().sort((a,b)=>{
@@ -233,20 +267,27 @@ https://anilist.co/manga/30002"></textarea>
     }
     const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? ((a==='–')-(b==='–')||a-b) : ((b==='–')-(a==='–')||b-a));
 
-    let h1=0,h2=0;
-    for(const y of years){
-      const c=document.createElement('div');
-      c.innerHTML=`<div class="year-head">${y==='–'?'Unknown':y} —</div>`;
-      for(const it of groups.get(y)){
-        const hasImg = SHOW_IMAGE && it.image;
-        const row=document.createElement('div'); row.className=hasImg?'card':'item';
-        const tag = (TAG_MODE==='auto' && it.type)?`<span class="tag">${it.type}</span>`:'';
-        row.innerHTML = hasImg
-          ? `<img class="thumb" src="${it.image}" loading="lazy" alt=""><div class="title-wrap"><span class="t">${it.title}</span>${tag}</div><span class="year">${it.year||'–'}</span>`
-          : `${tag}<span>${it.title}</span><span class="year">${it.year||'–'}</span>`;
-        c.appendChild(row);
+    const { cols } = buildColumns(groups, years, SHOW_IMAGE, COLS);
+
+    // Crée N colonnes et les remplit
+    for(const c of cols){
+      const column = document.createElement('section');
+      column.className = 'list';
+      for(const block of c.blocks){
+        const container=document.createElement('div');
+        container.innerHTML=`<div class="year-head">${block.year==='–'?'Unknown':block.year} —</div>`;
+        for(const it of block.items){
+          const hasImg = SHOW_IMAGE && it.image;
+          const row=document.createElement('div'); row.className=hasImg?'card':'item';
+          const tag = (TAG_MODE==='auto' && it.type)?`<span class="tag">${it.type}</span>`:'';
+          row.innerHTML = hasImg
+            ? `<img class="thumb" src="${it.image}" loading="lazy" alt=""><div class="title-wrap"><span class="t">${it.title}</span>${tag}</div><span class="year">${it.year||'–'}</span>`
+            : `${tag}<span>${it.title}</span><span class="year">${it.year||'–'}</span>`;
+          container.appendChild(row);
+        }
+        column.appendChild(container);
       }
-      if(h1<=h2){col1.appendChild(c);h1+=1+groups.get(y).length;}else{col2.appendChild(c);h2+=1+groups.get(y).length;}
+      colsWrap.appendChild(column);
     }
   }
 
@@ -258,7 +299,7 @@ https://anilist.co/manga/30002"></textarea>
     }).join('\n');
   }
 
-  // --- Helpers export (images + shapes) ---
+  // --- Export helpers (images + shapes) ---
   function rrect(ctx,x,y,w,h,r=12){
     ctx.beginPath();
     ctx.moveTo(x+r,y);
@@ -268,7 +309,6 @@ https://anilist.co/manga/30002"></textarea>
     ctx.arcTo(x,y,x+w,y,r);
     ctx.closePath();
   }
-  // Charge image en évitant le "tainted canvas"
   async function loadCover(url){
     try{
       const r = await fetch(url,{mode:'cors',referrerPolicy:'no-referrer'});
@@ -290,38 +330,41 @@ https://anilist.co/manga/30002"></textarea>
     });
   }
 
+  // ---------------- EXPORT (N colonnes) -----------------
   async function exportPNG(){
     if(!state.length){ alert('Nothing to export'); return; }
 
-    // Group like preview
     const s = sortSel.value || 'yearDesc';
     const groups = new Map();
     for(const it of state){ const y = it.year || '–'; if(!groups.has(y)) groups.set(y, []); groups.get(y).push(it); }
     const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? ((a==='–')-(b==='–')||a-b) : ((b==='–')-(a==='–')||b-a));
 
-    // Preload covers if images ON
     const WANT_IMG = SHOW_IMAGE === true;
+
+    // Précharge les images seulement si ON
     const coverMap = new Map();
     if(WANT_IMG){
       for(const y of years){
         for(const it of groups.get(y)){
           if(it.image && !coverMap.has(it)){
-            try{ coverMap.set(it, await loadCover(it.image)); }catch(_){ /* ignore */ }
+            try{ coverMap.set(it, await loadCover(it.image)); }catch(_){}
           }
         }
       }
     }
 
-    // Layout
-    const DPR = Math.max(1, window.devicePixelRatio||1);
-    const pad=24, headH=30, gap=12, thumbW=64, thumbH=90;
-    const leftCol = pad + (WANT_IMG ? (thumbW+gap) : 0);
-    const rowH = Math.max(42, WANT_IMG ? (thumbH + 18) : 42);
-    const width = 1000;
+    // Calcul colonnes (même logique que preview)
+    const { cols, heightOf, rowH, headH, vGap } = buildColumns(groups, years, WANT_IMG, COLS);
 
-    // Height
-    const rowsWithHeads = years.reduce((acc,y)=> acc + 1 + groups.get(y).length, 0);
-    const height = pad*2 + rowsWithHeads*rowH + years.length*(headH - rowH);
+    // Dimensions canvas
+    const DPR = Math.max(1, window.devicePixelRatio||1);
+    const pad=24, gutter=16;
+    const totalWidth = 1200;                                   // largeur cible
+    const width = Math.max(900, totalWidth);                   // minimum
+    const colW = Math.floor((width - pad*2 - gutter*(COLS-1)) / COLS);
+    const titleH = 18 + 6;
+    const innerH = Math.max(...cols.map(c=>heightOf(c)));
+    const height = pad + titleH + 8 + innerH + pad;
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -329,61 +372,73 @@ https://anilist.co/manga/30002"></textarea>
     canvas.style.width = width+'px'; canvas.style.height = height+'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
 
-    // BG + title
+    // Fond + titre
     ctx.fillStyle = '#0f1220'; ctx.fillRect(0,0,width,height);
     ctx.fillStyle = '#e6e8ef';
-    ctx.font='600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.font = '600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
     ctx.fillText('OtomeList · AniList Import', pad, pad-6+18);
 
-    let y = pad + 28;
-    for(const yr of years){
-      ctx.fillStyle='#9aa3b2';
-      ctx.font='700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.fillText(String(yr==='–'?'Unknown':yr)+' —', pad, y);
-      y += headH;
+    // Dessin colonnes
+    for(let i=0;i<COLS;i++){
+      const xStart = pad + i*(colW + gutter);
+      let y = pad + titleH + 8;
+      const c = cols[i];
+      for(let bi=0; bi<c.blocks.length; bi++){
+        const block = c.blocks[bi];
+        if(bi>0){ y += vGap; }
+        // année
+        ctx.fillStyle = '#9aa3b2';
+        ctx.font = '700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+        ctx.fillText(String(block.year==='–'?'Unknown':block.year)+' —', xStart, y);
+        y += headH;
 
-      for(const it of groups.get(yr)){
-        // card
-        ctx.save();
-        rrect(ctx, pad-2, y-22, width - pad*2 + 4, rowH-6, 12);
-        ctx.fillStyle='#151a2d'; ctx.fill();
-        ctx.lineWidth=1; ctx.strokeStyle='#2a2f4a'; ctx.stroke();
-        ctx.restore();
-
-        // cover
-        const cover = WANT_IMG ? coverMap.get(it) : null;
-        if(cover){
+        // items
+        for(const it of block.items){
+          // carte
           ctx.save();
-          rrect(ctx, pad, y-18, thumbW, thumbH, 8);
-          ctx.clip();
-          ctx.drawImage(cover.img, pad, y-18, thumbW, thumbH);
+          rrect(ctx, xStart-2, y-22, colW + 4, rowH-6, 12);
+          ctx.fillStyle='#151a2d'; ctx.fill();
+          ctx.lineWidth=1; ctx.strokeStyle='#2a2f4a'; ctx.stroke();
           ctx.restore();
+
+          const thumbW=64, thumbH=90, gap=12;
+          const leftText = xStart + (WANT_IMG ? (thumbW+gap) : 0);
+
+          // vignette
+          const cover = WANT_IMG ? coverMap.get(it) : null;
+          if(cover){
+            ctx.save();
+            rrect(ctx, xStart, y-18, thumbW, thumbH, 8);
+            ctx.clip();
+            ctx.drawImage(cover.img, xStart, y-18, thumbW, thumbH);
+            ctx.restore();
+          }
+
+          // tag
+          const useTag = (TAG_MODE==='auto' && it.type);
+          let titleX = leftText;
+          if(useTag){
+            const tag = it.type;
+            ctx.font='12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+            const tagPadX=10, tagH=24, tagW = Math.ceil(ctx.measureText(tag).width)+tagPadX*2;
+            ctx.save(); rrect(ctx, titleX, y-18, tagW, tagH, 12); ctx.fillStyle='#2a2f4a'; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle='#32375a'; ctx.stroke(); ctx.restore();
+            ctx.fillStyle='#e6e8ef'; ctx.fillText(tag, titleX+tagPadX, y-18+16);
+            titleX += tagW + 12;
+          }
+
+          // titre
+          ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+          ctx.fillStyle='#e6e8ef';
+          ctx.fillText(it.title, titleX, y-18+16);
+
+          // année
+          const ys = String(it.year||'');
+          const yw = ctx.measureText(ys).width;
+          ctx.fillStyle='#9aa3b2';
+          ctx.fillText(ys, xStart + colW - 12 - yw, y-18+16);
+
+          y += rowH;
         }
-
-        // tag
-        const useTag = (TAG_MODE==='auto' && it.type);
-        let titleX = leftCol;
-        if(useTag){
-          const tag = it.type;
-          ctx.font='12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-          const tagPadX=10, tagH=24, tagW = Math.ceil(ctx.measureText(tag).width)+tagPadX*2;
-          ctx.save(); rrect(ctx, titleX, y-18, tagW, tagH, 12); ctx.fillStyle='#2a2f4a'; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle='#32375a'; ctx.stroke(); ctx.restore();
-          ctx.fillStyle='#e6e8ef'; ctx.fillText(tag, titleX+tagPadX, y-18+16);
-          titleX += tagW + 12;
-        }
-
-        // title
-        ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-        ctx.fillStyle='#e6e8ef';
-        ctx.fillText(it.title, titleX, y-18+16);
-
-        // year
-        const ys = String(it.year||'');
-        const yw = ctx.measureText(ys).width;
-        ctx.fillStyle='#9aa3b2';
-        ctx.fillText(ys, width-pad-yw, y-18+16);
-
-        y += rowH;
       }
     }
 
@@ -393,19 +448,21 @@ https://anilist.co/manga/30002"></textarea>
     exportArea.style.display = 'block';
   }
 
-  // --- UI bindings ---
+  // ------ UI ------
   on(btnEg,'click', ()=>{ urls.value='https://anilist.co/anime/5114/\nhttps://anilist.co/anime/15315/\nhttps://anilist.co/manga/30002/'; });
+
   on(btnFetch,'click', async()=>{
     const lines=(urls.value||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);
     const refs = lines.map(parseId).filter(Boolean);
     if(!refs.length){ alert('No valid AniList links detected.'); return; }
-    // dedupe by id
     const seen=new Set(), unique=[];
     for(const r of refs){ if(!seen.has(r.id)){ seen.add(r.id); unique.push(r); } }
     state = await fetchAll(unique);
     render();
   });
+
   on(btnExport,'click', ()=>{ exportPNG(); });
+
   on(btnCopy,'click', ()=>{
     const text = toText();
     (async()=>{
@@ -421,6 +478,7 @@ https://anilist.co/manga/30002"></textarea>
       }catch(_){ alert('Copy failed.'); }
     })();
   });
+
   on(sortSel,'change', render);
 })();
 </script>
