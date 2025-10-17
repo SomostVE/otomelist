@@ -66,9 +66,6 @@
   .switch button{ border:none; background:transparent; color:#c8cfe0; padding:6px 10px; border-radius:999px; cursor:pointer }
   .switch button.active{ background:#2a2f4a; color:#fff }
   select.slim{ appearance:none; background:#121528; color:#e6e8ef; border:1px solid #2a2f4a; padding:8px 10px; border-radius:10px; font-weight:600 }
-
-  /* Export note */
-  .note{ color:#9aa3b2; font-size:12px; margin-left:8px }
 </style>
 </head>
 <body>
@@ -134,8 +131,7 @@ https://anilist.co/manga/30002"></textarea>
       </div>
 
       <div style="margin-top:12px" class="row">
-        <button class="btn" id="btn-export">Export SVG</button>
-        <span class="note">No CORS issues. For PNG, utiliser un proxy/serveur.</span>
+        <button class="btn" id="btn-export">Export PNG</button>
         <button class="btn" id="btn-copy">Copy as text</button>
       </div>
     </div>
@@ -154,9 +150,9 @@ https://anilist.co/manga/30002"></textarea>
       <div class="panel">
         <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px">
           <strong>Export preview</strong>
-          <a id="dl" class="btn" download="anilist-export.svg">Download</a>
+          <a id="dl" class="btn" download="anilist-export.png">Download</a>
         </div>
-        <img id="img" alt="SVG preview" style="max-width:100%; border:1px solid #2a2f4a; border-radius:10px"/>
+        <img id="img" alt="PNG preview" style="max-width:100%; border:1px solid #2a2f4a; border-radius:10px"/>
       </div>
     </div>
   </div>
@@ -242,22 +238,18 @@ https://anilist.co/manga/30002"></textarea>
   }
 
   let state=[];
+  const coverBitmapCache = new Map(); // url|proxyUrl => ImageBitmap
 
-  function fitText(ctxMeasure, text, maxW){
-    // ctxMeasure: object with measureText(str)->{width}
-    if (ctxMeasure.measureText(text).width <= maxW) return text;
-    const ell = '…', ellW = ctxMeasure.measureText(ell).width;
+  function fitText(ctx, text, maxW){
+    if (ctx.measureText(text).width <= maxW) return text;
+    const ell = '…', ellW = ctx.measureText(ell).width;
     let lo=0, hi=text.length;
     while(lo<hi){
       const mid = Math.floor((lo+hi+1)/2);
-      if (ctxMeasure.measureText(text.slice(0,mid)).width + ellW <= maxW) lo=mid; else hi=mid-1;
+      if (ctx.measureText(text.slice(0,mid)).width + ellW <= maxW) lo=mid; else hi=mid-1;
     }
     return text.slice(0,lo) + ell;
   }
-
-  // Minimal measurer using canvas, only for width computation (no drawing)
-  const measurer = document.createElement('canvas').getContext('2d');
-  function setFont(spec){ measurer.font = spec; }
 
   function sortItems(items){
     return items.slice().sort((a,b)=>{
@@ -350,38 +342,104 @@ https://anilist.co/manga/30002"></textarea>
     }).join('\n');
   }
 
-  // -------- SVG EXPORT (no canvas, no CORS issues) --------
-  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  // ---------- EXPORT PNG (avec fallback CORS helper pour les images bloquées) ----------
+  // Proxy CORS (remplace par ton Worker si besoin)
+  const PROXY = 'https://images.weserv.nl/?url='; // attend une URL SANS protocole
+  function proxyUrl(u){
+    try{
+      const noProto = String(u).replace(/^https?:\/\//,'');
+      return PROXY + encodeURIComponent(noProto);
+    }catch{return u;}
+  }
 
-  function exportSVG(){
+  async function fetchBitmapVia(url){
+    const res = await fetch(url, { mode:'cors', credentials:'omit' });
+    if(!res.ok) throw new Error('fetch failed');
+    const blob = await res.blob();
+    if(!blob || !blob.size) throw new Error('empty blob');
+    return await createImageBitmap(blob);
+  }
+
+  async function loadCoverForExport(url){
+    // 1) Essaye l’URL d’origine (identique au preview)
+    try{
+      const bmp = await fetchBitmapVia(url);
+      coverBitmapCache.set(url, bmp);
+      return { bmp, used:url };
+    }catch(_){ /* CORS/403/etc → fallback */ }
+
+    // 2) Fallback : proxy CORS (rendu identique mais “exportable”)
+    const purl = proxyUrl(url);
+    try{
+      const bmp = await fetchBitmapVia(purl);
+      coverBitmapCache.set(purl, bmp);
+      return { bmp, used:purl };
+    }catch(_){
+      return { bmp:null, used:null };
+    }
+  }
+
+  async function exportPNG(){
     if(!state.length){ alert('Nothing to export'); return; }
-
     const L = buildColumns(state);
 
+    // Précharge toutes les jaquettes (origin → proxy si besoin)
+    const needed = [];
+    if(SHOW_IMAGE){
+      const add = it => { if(it.image) needed.push(it.image); };
+      if(L.mode==='year'){ for(const c of L.cols) for(const b of c.blocks) for(const it of b.items) add(it); }
+      else { for(const c of L.cols) for(const it of c.items) add(it); }
+    }
+
+    // Map URL d’origine -> ImageBitmap (ou null si impossible)
+    const ready = new Map();
+    for(const u of needed){
+      if(ready.has(u)) continue;
+      // Si on a déjà un bitmap (origin ou proxy) en cache, réutilise
+      let bmp = coverBitmapCache.get(u) || null;
+      if(!bmp){
+        const { bmp:loaded } = await loadCoverForExport(u);
+        bmp = loaded;
+      }
+      ready.set(u, bmp || null);
+    }
+
+    const DPR = Math.max(1, window.devicePixelRatio||1);
     const pad=24, gutter=16, width=1200;
     const colW = Math.floor((width - pad*2 - gutter*(COLS-1)) / COLS);
     const titleH = 18 + 6;
-
     const innerH = Math.max(...L.cols.map(c=>L.heightOf(c)));
     const height = pad + titleH + 8 + innerH + pad;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = width*DPR; canvas.height = height*DPR;
+    canvas.style.width = width+'px'; canvas.style.height = height+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+
+    ctx.fillStyle = '#0f1220'; ctx.fillRect(0,0,width,height);
+    ctx.fillStyle = '#e6e8ef';
+    ctx.font = '600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.fillText('OtomeList · AniList Import', pad, pad-6+18);
 
     const thumbW=64, thumbH=90, gap=12;
     const rowH = L.rowH, headH = L.headH, vGap = L.vGap;
 
-    const fontTitle = '14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-    const fontHead  = '700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-    const fontTop   = '600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-
-    // setup measurer
-    setFont('14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial');
-
-    const blocks=[];
-
-    // Background
-    blocks.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="#0f1220"/>`);
-    // Title
-    blocks.push(`<text x="${pad}" y="${pad-6+18}" fill="#e6e8ef" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="18" font-weight="600">OtomeList · AniList Import</text>`);
-
+    function rrect(ctx,x,y,w,h,r=12){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r);
+      ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);
+      ctx.arcTo(x,y,x+w,y,r);
+      ctx.closePath();
+    }
+    function drawTitle(x, y, text, maxRight){
+      ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillStyle='#e6e8ef';
+      const maxW = maxRight - x;
+      ctx.fillText(fitText(ctx, text, maxW), x, y);
+    }
     const makeTitle = (it)=> APPEND_YEAR && it.year ? `${it.title} (${it.year})` : it.title;
 
     for(let i=0;i<COLS;i++){
@@ -392,68 +450,52 @@ https://anilist.co/manga/30002"></textarea>
         for(let bi=0; bi<L.cols[i].blocks.length; bi++){
           const block = L.cols[i].blocks[bi];
           if(bi>0){ y += vGap; }
-          blocks.push(`<text x="${xStart}" y="${y}" fill="#9aa3b2" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" font-weight="700">${esc(String(block.year==='–'?'Unknown':block.year)+' —')}</text>`);
+          ctx.fillStyle='#9aa3b2';
+          ctx.font='700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+          ctx.fillText(String(block.year==='–'?'Unknown':block.year)+' —', xStart, y);
           y += headH;
 
           for(const it of block.items){
-            const rx=12;
-            blocks.push(`<rect x="${xStart-2}" y="${y-22}" width="${colW+4}" height="${rowH-6}" rx="${rx}" ry="${rx}" fill="#151a2d" stroke="#2a2f4a" stroke-width="1"/>`);
+            ctx.save(); rrect(ctx, xStart-2, y-22, colW + 4, rowH-6, 12);
+            ctx.fillStyle='#151a2d'; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle='#2a2f4a'; ctx.stroke(); ctx.restore();
 
             const leftText = xStart + (SHOW_IMAGE ? (thumbW+gap) : 0);
             const rightEdge = xStart + colW - 12;
 
             if(SHOW_IMAGE && it.image){
-              // Clip for image rounded corners
-              const cid = `clip-${i}-${bi}-${y}`;
-              blocks.push(`<clipPath id="${cid}"><rect x="${xStart}" y="${y-18}" width="${thumbW}" height="${thumbH}" rx="8" ry="8"/></clipPath>`);
-              blocks.push(`<image x="${xStart}" y="${y-18}" width="${thumbW}" height="${thumbH}" href="${esc(it.image)}" clip-path="url(#${cid})" preserveAspectRatio="xMidYMid slice"/>`);
+              const bmp = ready.get(it.image);
+              if(bmp){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(bmp, xStart, y-18, thumbW, thumbH); ctx.restore(); }
             }
-
-            // Truncate text to available width using canvas measurer
-            const maxW = rightEdge - leftText;
-            const t = fitText(measurer, makeTitle(it), maxW);
-            blocks.push(`<text x="${leftText}" y="${y-18+16}" fill="#e6e8ef" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14">${esc(t)}</text>`);
-
+            drawTitle(leftText, y-18+16, makeTitle(it), rightEdge);
             y += rowH;
           }
         }
       }else{
         for(const it of L.cols[i].items){
-          const rx=12;
-          blocks.push(`<rect x="${xStart-2}" y="${y-22}" width="${colW+4}" height="${rowH-6}" rx="${rx}" ry="${rx}" fill="#151a2d" stroke="#2a2f4a" stroke-width="1"/>`);
+          ctx.save(); rrect(ctx, xStart-2, y-22, colW + 4, rowH-6, 12);
+          ctx.fillStyle='#151a2d'; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle='#2a2f4a'; ctx.stroke(); ctx.restore();
 
           const leftText = xStart + (SHOW_IMAGE ? (thumbW+gap) : 0);
           const rightEdge = xStart + colW - 12;
 
           if(SHOW_IMAGE && it.image){
-            const cid = `clip-${i}-flat-${y}`;
-            blocks.push(`<clipPath id="${cid}"><rect x="${xStart}" y="${y-18}" width="${thumbW}" height="${thumbH}" rx="8" ry="8"/></clipPath>`);
-            blocks.push(`<image x="${xStart}" y="${y-18}" width="${thumbW}" height="${thumbH}" href="${esc(it.image)}" clip-path="url(#${cid})" preserveAspectRatio="xMidYMid slice"/>`);
+            const bmp = ready.get(it.image);
+            if(bmp){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(bmp, xStart, y-18, thumbW, thumbH); ctx.restore(); }
           }
-
-          const maxW = rightEdge - leftText;
-          const t = fitText(measurer, makeTitle(it), maxW);
-          blocks.push(`<text x="${leftText}" y="${y-18+16}" fill="#e6e8ef" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14">${esc(t)}</text>`);
-
+          drawTitle(leftText, y-18+16, makeTitle(it), rightEdge);
           y += rowH;
         }
       }
     }
 
-    const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <defs></defs>
-  ${blocks.join('\n  ')}
-</svg>`.trim();
-
-    const blob = new Blob([svg], {type:'image/svg+xml;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    img.src = url;
-    dl.href = url;
-    dl.download = `anilist-export-${new Date().toISOString().slice(0,10)}.svg`;
-    exportArea.style.display = 'block';
+    canvas.toBlob(blob=>{
+      const url = URL.createObjectURL(blob);
+      img.src = url; dl.href = url;
+      dl.download = `anilist-export-${new Date().toISOString().slice(0,10)}.png`;
+      exportArea.style.display = 'block';
+    }, 'image/png');
   }
-  // --------------------------------------------------------
+  // -------------------------------------------------------------------------------------
 
   on(btnEg,'click', ()=>{ urls.value='https://anilist.co/anime/5114/\nhttps://anilist.co/anime/15315/\nhttps://anilist.co/manga/30002/'; });
 
@@ -467,7 +509,7 @@ https://anilist.co/manga/30002"></textarea>
     render();
   });
 
-  on(btnExport,'click', ()=>{ exportSVG(); });
+  on(btnExport,'click', ()=>{ exportPNG(); });
 
   on(btnCopy,'click', ()=>{
     const text = toText();
