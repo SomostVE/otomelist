@@ -6,12 +6,11 @@
   <title>OtomeList · AniList Import</title>
   <style>
     :root{
-      --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --brand:#7c5cff; --badge:#2a2f4a;
-      --ok:#19c37d; --warn:#ffb020;
+      --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --brand:#7c5cff;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
          background:radial-gradient(1200px 800px at 10% -10%, #1b1f36 0%, rgba(27,31,54,0) 60%),
                     radial-gradient(1000px 700px at 110% 10%, #221b44 0%, rgba(34,27,68,0) 60%), var(--bg);
          color:var(--text)}
@@ -23,7 +22,7 @@
     .logo{width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg, var(--brand), #00e7ff)}
     .title{font-weight:700; letter-spacing:0.3px}
 
-    .panel{background:var(--panel); border:1px solid #2a2f4a; border-radius:14px; padding:12px}
+    .panel{background:#171a2b; border:1px solid #2a2f4a; border-radius:14px; padding:12px}
     .row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
     .btn{appearance:none; border:none; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600;
          background:linear-gradient(180deg, #2a2f4a, #222640); color:#e8eafb; box-shadow:0 6px 16px rgba(0,0,0,.25)}
@@ -32,10 +31,10 @@
     textarea{width:100%; min-height:160px; background:#14182b; color:var(--text); border:1px solid #2a2f4a; border-radius:12px; padding:10px}
     code{background:#121528; padding:2px 6px; border-radius:6px; border:1px solid #262b44}
 
-    .grid{display:grid; gap:16px; grid-template-columns: 1.1fr 1fr}
-    @media (max-width: 980px){ .grid{grid-template-columns: 1fr} }
+    /* preview under input (single column) */
+    .stack{display:grid; gap:16px; grid-template-columns: 1fr}
 
-    /* list rendering */
+    /* preview list */
     .list-grid{display:grid; grid-template-columns: 1fr 1fr; gap:16px}
     @media (max-width: 980px){ .list-grid{grid-template-columns: 1fr} }
     .list{display:flex; flex-direction:column; gap:10px}
@@ -45,10 +44,8 @@
     .thumb{width:64px; height:90px; border-radius:8px; object-fit:cover; display:block; background:#0f1220; border:1px solid #2a2f4a}
     .title-wrap{display:flex; flex-direction:column}
     .title-wrap .t{font-weight:600}
-    .title-wrap .tag{margin-top:4px; width:max-content}
-    .tag{border:1px solid #32375a; border-radius:999px; padding:4px 8px; font-size:12px; color:#e6e8ef; background:#2a2f4a}
+    .tag{margin-top:4px; width:max-content; border:1px solid #32375a; border-radius:999px; padding:4px 8px; font-size:12px; color:#e6e8ef; background:#2a2f4a}
     .year{color:var(--muted)}
-
     .empty{opacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:center}
     footer{max-width:1200px; margin:32px auto 40px; padding:0 16px; color:var(--muted); text-align:center}
     label.inline{display:inline-flex; align-items:center; gap:8px}
@@ -67,60 +64,61 @@
   </header>
 
   <main>
-    <div class="wrap">
-      <div class="grid">
-        <div class="panel">
-          <div class="row" style="justify-content:space-between; margin-bottom:8px">
-            <strong>Paste AniList links</strong>
-            <div class="row" style="gap:6px">
-              <button class="btn" id="btn-eg">Example</button>
-              <button class="btn ok" id="btn-fetch">Fetch</button>
+    <div class="wrap stack">
+      <!-- Input panel -->
+      <div class="panel">
+        <div class="row" style="justify-content:space-between; margin-bottom:8px">
+          <strong>Paste AniList links</strong>
+          <div class="row" style="gap:6px">
+            <button class="btn" id="btn-eg">Example</button>
+            <button class="btn ok" id="btn-fetch">Fetch</button>
+          </div>
+        </div>
+        <p style="opacity:.85">One URL per line. Supports <code>https://anilist.co/anime/ID</code> or <code>https://anilist.co/manga/ID</code>.</p>
+        <textarea id="urls" placeholder="https://anilist.co/anime/5114
+https://anilist.co/manga/30002"></textarea>
+
+        <div style="margin-top:12px; display:flex; align-items:center; gap:18px; flex-wrap:wrap">
+          <div>
+            <label class="inline" style="margin-right:8px">Tag mode:</label>
+            <div class="switch" role="tablist" aria-label="Tag mode">
+              <button id="mode-auto" class="active" aria-pressed="true">Auto (Anime/Manga)</button>
+              <button id="mode-none" aria-pressed="false">None (title + year)</button>
             </div>
           </div>
-          <p style="opacity:.85">One URL per line. Supports <code>https://anilist.co/anime/ID</code> or <code>https://anilist.co/manga/ID</code>.</p>
-          <textarea id="urls" placeholder="https://anilist.co/anime/5114\nhttps://anilist.co/manga/30002"></textarea>
-
-          <div style="margin-top:12px; display:flex; align-items:center; gap:18px; flex-wrap:wrap">
-            <div>
-              <label class="inline" style="margin-right:8px">Tag mode:</label>
-              <div class="switch" role="tablist" aria-label="Tag mode">
-                <button id="mode-auto" class="active" aria-pressed="true">Auto (Anime/Manga)</button>
-                <button id="mode-none" aria-pressed="false">None (title + year)</button>
-              </div>
+          <div>
+            <label class="inline" style="margin-right:8px">Images:</label>
+            <div class="switch" role="tablist" aria-label="Images">
+              <button id="img-on" class="active" aria-pressed="true">On</button>
+              <button id="img-off" aria-pressed="false">Off</button>
             </div>
-            <div>
-              <label class="inline" style="margin-right:8px">Images:</label>
-              <div class="switch" role="tablist" aria-label="Images">
-                <button id="img-on" class="active" aria-pressed="true">On</button>
-                <button id="img-off" aria-pressed="false">Off</button>
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top:12px" class="row">
-            <button class="btn" id="btn-export">Export PNG</button>
-            <button class="btn" id="btn-copy">Copy as text</button>
           </div>
         </div>
 
-        <div class="panel">
-          <div class="row" style="justify-content:space-between; margin-bottom:8px">
-            <strong>Preview</strong>
-            <div class="row" style="gap:6px">
-              <select id="sortSel" class="btn" style="padding:8px 10px">
-                <option value="yearDesc">Year ↓</option>
-                <option value="yearAsc">Year ↑</option>
-                <option value="titleAsc">Title A→Z</option>
-                <option value="titleDesc">Title Z→A</option>
-              </select>
-            </div>
-          </div>
-          <div class="list-grid">
-            <section class="list" id="col1"></section>
-            <section class="list" id="col2"></section>
-          </div>
-          <div id="empty" class="empty" style="display:none; margin-top:10px">No results yet. Paste links and click Fetch.</div>
+        <div style="margin-top:12px" class="row">
+          <button class="btn" id="btn-export">Export PNG</button>
+          <button class="btn" id="btn-copy">Copy as text</button>
         </div>
+      </div>
+
+      <!-- Preview panel (always below) -->
+      <div class="panel">
+        <div class="row" style="justify-content:space-between; margin-bottom:8px">
+          <strong>Preview</strong>
+          <div class="row" style="gap:6px">
+            <select id="sortSel" class="btn" style="padding:8px 10px">
+              <option value="yearDesc">Year ↓</option>
+              <option value="yearAsc">Year ↑</option>
+              <option value="titleAsc">Title A→Z</option>
+              <option value="titleDesc">Title Z→A</option>
+            </select>
+          </div>
+        </div>
+        <div class="list-grid">
+          <section class="list" id="col1"></section>
+          <section class="list" id="col2"></section>
+        </div>
+        <div id="empty" class="empty" style="display:none; margin-top:10px">No results yet. Paste links and click Fetch.</div>
       </div>
 
       <div id="exportArea" style="display:none; margin-top:16px">
@@ -162,18 +160,31 @@
   const dl = $('#dl');
   $('#year').textContent = new Date().getFullYear();
 
-  let TAG_MODE = 'auto'; // 'auto' | 'none'
-  let SHOW_IMAGE = true; // toggle images
+  let TAG_MODE = 'auto';   // 'auto' | 'none'
+  let SHOW_IMAGE = true;   // toggle images
   on(modeAuto,'click', ()=>{ TAG_MODE='auto'; modeAuto.classList.add('active'); modeNone.classList.remove('active'); render(); });
   on(modeNone,'click', ()=>{ TAG_MODE='none'; modeNone.classList.add('active'); modeAuto.classList.remove('active'); render(); });
   on(imgOn,'click', ()=>{ SHOW_IMAGE=true; imgOn.classList.add('active'); imgOff.classList.remove('active'); render(); });
   on(imgOff,'click', ()=>{ SHOW_IMAGE=false; imgOff.classList.add('active'); imgOn.classList.remove('active'); render(); });
 
   const API = 'https://graphql.anilist.co';
-  const query = `query ($id: Int){ Media(id:$id){ id type format title{romaji english native} seasonYear startDate{year} coverImage{large medium color} } }`;
+  const query = `query ($id: Int){
+    Media(id:$id){
+      id type format title{romaji english native}
+      seasonYear startDate{year}
+      coverImage{large medium color}
+    }
+  }`;
 
-  function parseId(u){
-    try{ const url=new URL(u.trim()); const parts=url.pathname.split('/').filter(Boolean); const type=parts[0]; const id=parseInt(parts[1],10); if(!id||!(type==='anime'||type==='manga')) return null; return {id, kind:type}; }catch{ return null; }
+  // robust ID parsing: accepts raw ID, or any anilist.co/anime|manga/<id>...
+  function parseAniId(u){
+    try{
+      const s = String(u).trim();
+      if(/^\d+$/.test(s)) return { id:parseInt(s,10), kind:'anime' };
+      const m = s.match(/anilist\\.co\\/(anime|manga)\\/(\\d+)/i);
+      if(!m) return null; const kind=m[1].toLowerCase(); const id=parseInt(m[2],10);
+      if(!id) return null; return { id, kind };
+    }catch{ return null; }
   }
 
   async function fetchOne(item){
@@ -227,9 +238,9 @@
         const row=document.createElement('div'); row.className= hasImg ? 'card' : 'item';
         const tag = (TAG_MODE==='auto' && it.type) ? `<span class="tag">${it.type}</span>` : '';
         if(hasImg){
-          row.innerHTML = `<img class="thumb" src="${it.image}" loading="lazy" alt="">`+
-                          `<div class="title-wrap"><span class="t">${it.title}</span>${tag}</div>`+
-                          `<span class="year">${it.year||'–'}</span>`;
+          row.innerHTML = `<img class="thumb" src="${it.image}" loading="lazy" alt="">`
+                        + `<div class="title-wrap"><span class="t">${it.title}</span>${tag}</div>`
+                        + `<span class="year">${it.year||'–'}</span>`;
         }else{
           row.innerHTML = `${tag}<span>${it.title}</span><span class="year">${it.year||'–'}</span>`;
         }
@@ -245,16 +256,16 @@
       const core = `${it.title} (${it.year||''})`.trim();
       if(TAG_MODE==='auto' && it.type){ return `[${it.type}] ${core}`; }
       return core;
-    }).join('\n');
+    }).join('\\n');
   }
 
   function exportPNG(){
     if(!state.length){ alert('Nothing to export'); return; }
     const DPR=Math.max(1, window.devicePixelRatio||1);
     const pad=24,rowH=42,headH=30,width=1000; const tagPadX=10;
-    // group
+
     const s = sortSel.value||'yearDesc';
-    const groups=new Map(); for(const it of state){ const y=it.year||'–'; if(!groups.has(y)) groups.set(y,[]); groups.get(y).push(it);} 
+    const groups=new Map(); for(const it of state){ const y=it.year||'–'; if(!groups.has(y)) groups.set(y,[]); groups.get(y).push(it);}
     const years=Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? ((a==='–')-(b==='–')||a-b) : ((b==='–')-(a==='–')||b-a));
     const totalRows = years.reduce((acc,y)=> acc + 1 + groups.get(y).length, 0);
     const height = pad*2 + totalRows*rowH + years.length*(headH-rowH);
@@ -281,7 +292,9 @@
         y+=rowH;
       }
     }
-    const url=canvas.toDataURL('image/png'); img.src=url; dl.href=url; dl.download=`anilist-export-${new Date().toISOString().slice(0,10)}.png`; exportArea.style.display='block';
+    const url=canvas.toDataURL('image/png');
+    img.src=url; dl.href=url; dl.download=`anilist-export-${new Date().toISOString().slice(0,10)}.png`;
+    exportArea.style.display='block';
   }
 
   on(btnEg,'click', ()=>{
@@ -290,9 +303,12 @@
 
   on(btnFetch,'click', async()=>{
     const lines = (urls.value||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);
-    const refs = lines.map(parseId).filter(Boolean);
+    const refs = lines.map(parseAniId).filter(Boolean);
     if(!refs.length){ alert('No valid AniList links detected.'); return; }
-    const { out, errors } = await fetchAll(refs);
+    // dedupe by id
+    const seen = new Set(); const unique=[];
+    for(const r of refs){ if(!seen.has(r.id)){ seen.add(r.id); unique.push(r); } }
+    const { out, errors } = await fetchAll(unique);
     state = out; render();
     if(errors.length) console.warn('Errors:', errors);
   });
