@@ -241,7 +241,7 @@ https://anilist.co/manga/30002"></textarea>
   }
 
   let state=[];
-  const coverBitmapCache = new Map(); // url => ImageBitmap
+  const coverBitmapCache = new Map(); // url => ImageBitmap | HTMLImageElement
 
   function fitText(ctx, text, maxW){
     if (ctx.measureText(text).width <= maxW) return text;
@@ -355,23 +355,45 @@ https://anilist.co/manga/30002"></textarea>
     ctx.closePath();
   }
 
+  // ---- FIX EXPORT IMAGES: robust loader with ImageBitmap + <img> fallback (CORS-safe) ----
   async function loadBitmap(url){
     if(!url) return null;
     if(coverBitmapCache.has(url)) return coverBitmapCache.get(url);
-    // Strictly blob -> ImageBitmap (no proxy, no <img> fallback) to avoid taint.
+
+    // 1) Modern path: fetch -> blob -> createImageBitmap (avoids taint when CORS OK)
     try{
-      const res = await fetch(url,{mode:'cors', credentials:'omit', referrerPolicy:'no-referrer'});
-      if(!res.ok) throw new Error('fetch cover failed');
-      const blob = await res.blob();
-      if(!blob || !blob.size) throw new Error('empty blob');
-      const bmp = await createImageBitmap(blob);
-      coverBitmapCache.set(url, bmp);
-      return bmp;
+      if (window.createImageBitmap){
+        const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        if(!res.ok) throw new Error('fetch cover failed');
+        const blob = await res.blob();
+        if(!blob || !blob.size) throw new Error('empty blob');
+        const bmp = await createImageBitmap(blob);
+        coverBitmapCache.set(url, bmp);
+        return bmp;
+      }
     }catch(_){
-      // If CORS blocks, we skip that cover (title still renders)
+      // fall through to <img> path
+    }
+
+    // 2) Fallback: HTMLImageElement with CORS anonymous.
+    // If server doesn’t provide CORS headers, we return null (skip image) to keep canvas exportable.
+    try{
+      const domImg = await new Promise((resolve, reject)=>{
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.decoding = 'async';
+        im.loading = 'eager';
+        im.onload = ()=> resolve(im);
+        im.onerror = ()=> reject(new Error('img load failed'));
+        im.src = url;
+      });
+      coverBitmapCache.set(url, domImg);
+      return domImg;
+    }catch(_){
       return null;
     }
   }
+  // ---------------------------------------------------------------------------------------
 
   async function exportPNG(){
     if(!state.length){ alert('Nothing to export'); return; }
