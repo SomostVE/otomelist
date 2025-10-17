@@ -6,11 +6,10 @@
 <title>OtomeList · AniList Import</title>
 <style>
   :root{ --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --brand:#7c5cff; }
-
   *{ box-sizing:border-box }
   html,body{ height:100% }
 
-  /* Fond découplé du contenu */
+  /* Fond découplé : plus de bandes quand on scrolle */
   body{
     margin:0;
     background-color:var(--bg);
@@ -27,7 +26,7 @@
       radial-gradient(1200px 900px at 50% 120%, #0e1122 0%, rgba(14,17,34,0) 55%);
     background-repeat:no-repeat;
     will-change:transform;
-    transform:translateZ(0); /* évite les coutures sur certains GPU */
+    transform:translateZ(0);
   }
 
   header{
@@ -78,8 +77,7 @@
   <div class="wrap">
     <div class="row" style="justify-content:space-between">
       <div class="brand"><div class="logo"></div><div class="title">OtomeList · AniList Import</div></div>
-    </div>
-  </div>
+  </div></div>
 </header>
 
 <main>
@@ -112,11 +110,20 @@ https://anilist.co/manga/30002"></textarea>
           </select>
         </div>
         <div>
-          <label style="margin-right:8px">Sort by year:</label>
+          <label style="margin-right:8px">Group by year:</label>
           <div class="switch">
-            <button id="sort-year-on" class="active">On</button>
-            <button id="sort-year-off">Off</button>
+            <button id="group-year-on" class="active">On</button>
+            <button id="group-year-off">Off</button>
           </div>
+        </div>
+        <div>
+          <label style="margin-right:8px">Sort:</label>
+          <select id="sortSel" class="slim">
+            <option value="yearDesc" selected>Year ↓</option>
+            <option value="yearAsc">Year ↑</option>
+            <option value="titleAsc">Title A→Z</option>
+            <option value="titleDesc">Title Z→A</option>
+          </select>
         </div>
         <div>
           <label style="margin-right:8px">Append year in title:</label>
@@ -166,14 +173,16 @@ https://anilist.co/manga/30002"></textarea>
   // State
   let SHOW_IMAGE = true;
   let COLS = 3;                    // 1..5
-  let SORT_BY_YEAR = true;         // group + year headers when true
+  let GROUP_BY_YEAR = true;        // headers when true
   let APPEND_YEAR = false;         // append (YYYY) after title
+  let SORT_MODE = 'yearDesc';      // yearDesc | yearAsc | titleAsc | titleDesc
 
   // Refs
   const urls = $('#urls'), btnEg = $('#btn-eg'), btnFetch = $('#btn-fetch'),
         btnExport = $('#btn-export'), btnCopy = $('#btn-copy'),
         imgOn = $('#img-on'), imgOff = $('#img-off'),
-        sortYearOn = $('#sort-year-on'), sortYearOff = $('#sort-year-off'),
+        groupYearOn = $('#group-year-on'), groupYearOff = $('#group-year-off'),
+        sortSel = $('#sortSel'),
         appendYearOn = $('#append-year-on'), appendYearOff = $('#append-year-off'),
         colSel = $('#colSel'),
         colsWrap = $('#cols'), empty = $('#empty'),
@@ -182,13 +191,14 @@ https://anilist.co/manga/30002"></textarea>
   on(imgOn,'click', ()=>{ SHOW_IMAGE=true; imgOn.classList.add('active'); imgOff.classList.remove('active'); render(); });
   on(imgOff,'click', ()=>{ SHOW_IMAGE=false; imgOff.classList.add('active'); imgOn.classList.remove('active'); render(); });
 
-  on(sortYearOn,'click', ()=>{ SORT_BY_YEAR=true; sortYearOn.classList.add('active'); sortYearOff.classList.remove('active'); render(); });
-  on(sortYearOff,'click', ()=>{ SORT_BY_YEAR=false; sortYearOff.classList.add('active'); sortYearOn.classList.remove('active'); render(); });
+  on(groupYearOn,'click', ()=>{ GROUP_BY_YEAR=true; groupYearOn.classList.add('active'); groupYearOff.classList.remove('active'); render(); });
+  on(groupYearOff,'click', ()=>{ GROUP_BY_YEAR=false; groupYearOff.classList.add('active'); groupYearOn.classList.remove('active'); render(); });
 
   on(appendYearOn,'click', ()=>{ APPEND_YEAR=true; appendYearOn.classList.add('active'); appendYearOff.classList.remove('active'); render(); });
   on(appendYearOff,'click', ()=>{ APPEND_YEAR=false; appendYearOff.classList.add('active'); appendYearOn.classList.remove('active'); render(); });
 
   on(colSel,'change', ()=>{ COLS = Math.max(1, Math.min(5, parseInt(colSel.value,10)||3)); colsWrap.style.setProperty('--cols', COLS); render(); });
+  on(sortSel,'change', ()=>{ SORT_MODE = sortSel.value; render(); });
 
   const API = 'https://graphql.anilist.co';
   const query = `query ($id: Int){
@@ -232,6 +242,7 @@ https://anilist.co/manga/30002"></textarea>
   }
 
   let state=[];
+  const coverCache = new Map(); // url -> ImageBitmap|HTMLImageElement
 
   // -------- utils --------
   function fitText(ctx, text, maxW){
@@ -245,28 +256,38 @@ https://anilist.co/manga/30002"></textarea>
     return text.slice(0,lo) + ell;
   }
 
+  function sortItems(items){
+    return items.slice().sort((a,b)=>{
+      if(SORT_MODE==='yearDesc') return (b.year||0)-(a.year||0) || a.title.localeCompare(b.title);
+      if(SORT_MODE==='yearAsc')  return (a.year||0)-(b.year||0) || a.title.localeCompare(b.title);
+      if(SORT_MODE==='titleAsc') return a.title.localeCompare(b.title) || ((b.year||0)-(a.year||0));
+      if(SORT_MODE==='titleDesc')return b.title.localeCompare(a.title) || ((b.year||0)-(a.year||0));
+      return 0;
+    });
+  }
+
   // -------- layout balancing (N cols) --------
   function buildColumns(items){
-    const sorted = items.slice().sort((a,b)=>{
-      if(SORT_BY_YEAR){
-        return (b.year||0)-(a.year||0) || a.title.localeCompare(b.title);
-      } else {
-        return a.title.localeCompare(b.title) || (b.year||0)-(a.year||0);
-      }
-    });
+    const sorted = sortItems(items);
 
     const thumbH = 90, rowBase = 42, headH = 30, vGap = 12;
     const rowH = SHOW_IMAGE ? (thumbH + 18) : rowBase;
 
-    if (SORT_BY_YEAR){
+    if (GROUP_BY_YEAR){
       const groups = new Map();
       for(const it of sorted){ const y=it.year||'–'; if(!groups.has(y)) groups.set(y,[]); groups.get(y).push(it); }
-      const years = Array.from(groups.keys()).sort((a,b)=> (b==='–')-(a==='–') || b-a);
+
+      // years order follows SORT_MODE on year
+      const years = Array.from(groups.keys()).sort((a,b)=>{
+        if(SORT_MODE==='yearAsc')  return (a==='–')-(b==='–') || a-b;
+        // default & yearDesc
+        return (b==='–')-(a==='–') || b-a;
+      });
 
       const cols = Array.from({length:COLS}, ()=>({blocks:[], score:0}));
       for(const y of years){
         const items=groups.get(y);
-        const est = 1 + items.length; // 1 header + N rows
+        const est = 1 + items.length;
         let best=0; for(let i=1;i<COLS;i++) if(cols[i].score<cols[best].score) best=i;
         cols[best].blocks.push({year:y, items});
         cols[best].score += est;
@@ -343,24 +364,31 @@ https://anilist.co/manga/30002"></textarea>
     ctx.closePath();
   }
   async function loadCover(url){
+    if(!url) return null;
+    if(coverCache.has(url)) return coverCache.get(url);
+    // try CORS-safe blob
     try{
       const r = await fetch(url,{mode:'cors',referrerPolicy:'no-referrer'});
       if(r.ok){
         const b = await r.blob();
         if(b && b.size){
           const bmp = await createImageBitmap(b);
-          return {kind:'bitmap',img:bmp};
+          coverCache.set(url, bmp);
+          return bmp;
         }
       }
     }catch(_){}
-    return new Promise((res,rej)=>{
-      const el = new Image();
-      el.crossOrigin = 'anonymous';
-      try{ el.referrerPolicy = 'no-referrer'; }catch(_){}
-      el.onload = ()=>res({kind:'img',img:el});
-      el.onerror = ()=>rej(new Error('img load fail'));
-      el.src = url;
-    });
+    // fallback HTMLImageElement
+    const el = await new Promise((res,rej)=>{
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      try{ img.referrerPolicy = 'no-referrer'; }catch(_){}
+      img.onload = ()=>res(img);
+      img.onerror = ()=>rej(new Error('img load fail'));
+      img.src = url;
+    }).catch(()=>null);
+    if(el) coverCache.set(url, el);
+    return el;
   }
 
   // --------------- EXPORT (identique preview) -----------------
@@ -369,14 +397,16 @@ https://anilist.co/manga/30002"></textarea>
 
     const L = buildColumns(state);
 
-    // Preload covers only if ON
-    const coverMap = new Map();
+    // Preload covers (correct order: declare pending BEFORE using it)
+    const pending = [];
     if(SHOW_IMAGE){
-      const pending=[];
-      const add=it=>{ if(it.image && !coverMap.has(it)) pending.push(it); };
-      if(L.mode==='year'){ for(const c of L.cols) for(const b of c.blocks) for(const it of b.items) add(it); }
-      else { for(const c of L.cols) for(const it of c.items) add(it); }
-      for(const it of pending){ try{ coverMap.set(it, await loadCover(it.image)); }catch(_){ } }
+      const add = it => { if(it.image && !coverCache.has(it.image)) pending.push(it.image); };
+      if(L.mode==='year'){
+        for(const c of L.cols) for(const b of c.blocks) for(const it of b.items) add(it);
+      }else{
+        for(const c of L.cols) for(const it of c.items) add(it);
+      }
+      for(const url of pending){ try{ await loadCover(url); }catch(_){ } }
     }
 
     const DPR = Math.max(1, window.devicePixelRatio||1);
@@ -405,11 +435,7 @@ https://anilist.co/manga/30002"></textarea>
       ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.fillStyle='#e6e8ef';
       const maxW = maxRight - x;
-      const ell='…', ellW=ctx.measureText(ell).width;
-      if(ctx.measureText(text).width<=maxW){ ctx.fillText(text,x,y); return; }
-      let lo=0, hi=text.length;
-      while(lo<hi){ const mid=(lo+hi+1>>1); if(ctx.measureText(text.slice(0,mid)).width+ellW<=maxW) lo=mid; else hi=mid-1; }
-      ctx.fillText(text.slice(0,lo)+ell, x, y);
+      ctx.fillText(fitText(ctx, text, maxW), x, y);
     }
 
     const makeTitle = (it)=> APPEND_YEAR && it.year ? `${it.title} (${it.year})` : it.title;
@@ -428,15 +454,17 @@ https://anilist.co/manga/30002"></textarea>
           y += headH;
 
           for(const it of block.items){
+            // card
             ctx.save(); rrect(ctx, xStart-2, y-22, colW + 4, rowH-6, 12);
             ctx.fillStyle='#151a2d'; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle='#2a2f4a'; ctx.stroke(); ctx.restore();
 
             const leftText = xStart + (SHOW_IMAGE ? (thumbW+gap) : 0);
             const rightEdge = xStart + colW - 12;
 
-            const cover = SHOW_IMAGE ? coverMap.get(it) : null;
-            if(cover){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(cover.img, xStart, y-18, thumbW, thumbH); ctx.restore(); }
-
+            if(SHOW_IMAGE && it.image){
+              const imgObj = coverCache.get(it.image) || await loadCover(it.image);
+              if(imgObj){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(imgObj, xStart, y-18, thumbW, thumbH); ctx.restore(); }
+            }
             drawTitle(leftText, y-18+16, makeTitle(it), rightEdge);
             y += rowH;
           }
@@ -449,9 +477,10 @@ https://anilist.co/manga/30002"></textarea>
           const leftText = xStart + (SHOW_IMAGE ? (thumbW+gap) : 0);
           const rightEdge = xStart + colW - 12;
 
-          const cover = SHOW_IMAGE ? coverMap.get(it) : null;
-          if(cover){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(cover.img, xStart, y-18, thumbW, thumbH); ctx.restore(); }
-
+          if(SHOW_IMAGE && it.image){
+            const imgObj = coverCache.get(it.image) || await loadCover(it.image);
+            if(imgObj){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(imgObj, xStart, y-18, thumbW, thumbH); ctx.restore(); }
+          }
           drawTitle(leftText, y-18+16, makeTitle(it), rightEdge);
           y += rowH;
         }
