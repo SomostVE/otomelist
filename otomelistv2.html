@@ -9,6 +9,7 @@
   *{ box-sizing:border-box }
   html,body{ height:100% }
 
+  /* Fixed, non-repeating background */
   body{
     margin:0;
     background-color:var(--bg);
@@ -50,6 +51,8 @@
   code{ background:#121528; padding:2px 6px; border-radius:6px; border:1px solid #262b44 }
 
   .grid{ display:grid; gap:16px; grid-template-columns: 1fr }
+
+  /* Preview grid via --cols */
   .list-grid{ display:grid; grid-template-columns: repeat(var(--cols,3), 1fr); gap:16px }
   .list{ display:flex; flex-direction:column; gap:10px }
   .year-head{ margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; border-left:3px solid #2a2f4a; border-radius:6px }
@@ -168,10 +171,10 @@ https://anilist.co/manga/30002"></textarea>
 
   // State
   let SHOW_IMAGE = true;
-  let COLS = 3;
-  let GROUP_BY_YEAR = true;
-  let APPEND_YEAR = false;
-  let SORT_MODE = 'yearDesc';
+  let COLS = 3;                    // 1..5
+  let GROUP_BY_YEAR = true;        // headers when true
+  let APPEND_YEAR = false;         // append (YYYY) after title
+  let SORT_MODE = 'yearDesc';      // yearDesc | yearAsc | titleAsc | titleDesc
 
   // Refs
   const urls = $('#urls'), btnEg = $('#btn-eg'), btnFetch = $('#btn-fetch'),
@@ -238,7 +241,7 @@ https://anilist.co/manga/30002"></textarea>
   }
 
   let state=[];
-  const coverBitmapCache = new Map(); // url|proxyUrl => ImageBitmap
+  const coverBitmapCache = new Map(); // url|proxyUrl => ImageBitmap | HTMLImageElement
 
   function fitText(ctx, text, maxW){
     if (ctx.measureText(text).width <= maxW) return text;
@@ -342,33 +345,44 @@ https://anilist.co/manga/30002"></textarea>
     }).join('\n');
   }
 
-  // ---------- EXPORT PNG (avec fallback CORS helper pour les images bloquées) ----------
-  // Proxy CORS (remplace par ton Worker si besoin)
-  const PROXY = 'https://images.weserv.nl/?url='; // attend une URL SANS protocole
-  function proxyUrl(u){
-    try{
-      const noProto = String(u).replace(/^https?:\/\//,'');
-      return PROXY + encodeURIComponent(noProto);
-    }catch{return u;}
+  // ---------- EXPORT PNG avec fallback CORS fiable ----------
+  // Proxy CORS : concatène directement l'URL d'origine après r.jina.ai/
+  const PROXY = 'https://r.jina.ai/';
+  function proxyUrl(u){ return PROXY + u; }
+
+  async function loadImageElement(url){
+    return new Promise((resolve, reject)=>{
+      const im = new Image();
+      im.crossOrigin = 'anonymous';
+      im.decoding = 'async';
+      im.onload = ()=> resolve(im);
+      im.onerror = ()=> reject(new Error('img load failed'));
+      im.src = url;
+    });
   }
 
   async function fetchBitmapVia(url){
-    const res = await fetch(url, { mode:'cors', credentials:'omit' });
-    if(!res.ok) throw new Error('fetch failed');
-    const blob = await res.blob();
-    if(!blob || !blob.size) throw new Error('empty blob');
-    return await createImageBitmap(blob);
+    // Si createImageBitmap existe, on privilégie le pipeline fetch->blob->bitmap
+    if (window.createImageBitmap){
+      const res = await fetch(url, { mode:'cors', credentials:'omit' });
+      if(!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      if(!blob || !blob.size) throw new Error('empty blob');
+      return await createImageBitmap(blob);
+    }
+    // Fallback DOM image (HTMLImageElement), compatible Safari iOS
+    return await loadImageElement(url);
   }
 
   async function loadCoverForExport(url){
-    // 1) Essaye l’URL d’origine (identique au preview)
+    // 1) Tente l'URL d'origine (identique au preview)
     try{
       const bmp = await fetchBitmapVia(url);
       coverBitmapCache.set(url, bmp);
       return { bmp, used:url };
-    }catch(_){ /* CORS/403/etc → fallback */ }
+    }catch(_){}
 
-    // 2) Fallback : proxy CORS (rendu identique mais “exportable”)
+    // 2) Fallback : proxy CORS
     const purl = proxyUrl(url);
     try{
       const bmp = await fetchBitmapVia(purl);
@@ -381,9 +395,10 @@ https://anilist.co/manga/30002"></textarea>
 
   async function exportPNG(){
     if(!state.length){ alert('Nothing to export'); return; }
+
     const L = buildColumns(state);
 
-    // Précharge toutes les jaquettes (origin → proxy si besoin)
+    // Précharge toutes les jaquettes (origin -> proxy si besoin)
     const needed = [];
     if(SHOW_IMAGE){
       const add = it => { if(it.image) needed.push(it.image); };
@@ -391,17 +406,15 @@ https://anilist.co/manga/30002"></textarea>
       else { for(const c of L.cols) for(const it of c.items) add(it); }
     }
 
-    // Map URL d’origine -> ImageBitmap (ou null si impossible)
     const ready = new Map();
     for(const u of needed){
       if(ready.has(u)) continue;
-      // Si on a déjà un bitmap (origin ou proxy) en cache, réutilise
       let bmp = coverBitmapCache.get(u) || null;
       if(!bmp){
         const { bmp:loaded } = await loadCoverForExport(u);
-        bmp = loaded;
+        bmp = loaded || null;
       }
-      ready.set(u, bmp || null);
+      ready.set(u, bmp);
     }
 
     const DPR = Math.max(1, window.devicePixelRatio||1);
@@ -495,7 +508,7 @@ https://anilist.co/manga/30002"></textarea>
       exportArea.style.display = 'block';
     }, 'image/png');
   }
-  // -------------------------------------------------------------------------------------
+  // --------------------------------------------------------
 
   on(btnEg,'click', ()=>{ urls.value='https://anilist.co/anime/5114/\nhttps://anilist.co/anime/15315/\nhttps://anilist.co/manga/30002/'; });
 
