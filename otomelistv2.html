@@ -1,153 +1,149 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OtomeList · AniList Import</title>
-  <style>
-    :root{ --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --brand:#7c5cff; }
-    *{ box-sizing:border-box }
-    html,body{ height:100% }
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background:
-        radial-gradient(1200px 800px at 10% -10%, #1b1f36 0%, rgba(27,31,54,0) 60%),
-        radial-gradient(1000px 700px at 110% 10%, #221b44 0%, rgba(34,27,68,0) 60%),
-        var(--bg);
-      color:var(--text);
-    }
-    header{
-      position:sticky; top:0; z-index:5;
-      backdrop-filter:saturate(140%) blur(8px);
-      background:linear-gradient(180deg, rgba(15,18,32,0.9) 0%, rgba(15,18,32,0.6) 100%);
-      border-bottom:1px solid #262b44;
-    }
-    .wrap{ max-width:1200px; margin:0 auto; padding:16px }
-    .brand{ display:flex; gap:10px; align-items:center }
-    .logo{ width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg, var(--brand), #00e7ff) }
-    .title{ font-weight:700; letter-spacing:0.3px }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OtomeList · AniList Import</title>
+<style>
+  :root{ --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --brand:#7c5cff; }
+  *{ box-sizing:border-box }
+  html,body{ height:100% }
+  body{
+    margin:0;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    background:
+      radial-gradient(1200px 800px at 10% -10%, #1b1f36 0%, rgba(27,31,54,0) 60%),
+      radial-gradient(1000px 700px at 110% 10%, #221b44 0%, rgba(34,27,68,0) 60%),
+      var(--bg);
+    color:var(--text);
+  }
+  header{
+    position:sticky; top:0; z-index:5;
+    backdrop-filter:saturate(140%) blur(8px);
+    background:linear-gradient(180deg, rgba(15,18,32,0.9) 0%, rgba(15,18,32,0.6) 100%);
+    border-bottom:1px solid #262b44;
+  }
+  .wrap{ max-width:1200px; margin:0 auto; padding:16px }
+  .brand{ display:flex; gap:10px; align-items:center }
+  .logo{ width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg, var(--brand), #00e7ff) }
+  .title{ font-weight:700; letter-spacing:0.3px }
 
-    .panel{ background:#171a2b; border:1px solid #2a2f4a; border-radius:14px; padding:12px }
-    .row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center }
-    .btn{
-      appearance:none; border:none; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600;
-      background:linear-gradient(180deg, #2a2f4a, #222640); color:#e8eafb; box-shadow:0 6px 16px rgba(0,0,0,.25)
-    }
-    .btn:hover{ filter:brightness(1.08) }
-    .btn.ok{ background:linear-gradient(180deg, #124a37, #0f3d2e); color:#b6ffe0 }
-    textarea{ width:100%; min-height:160px; background:#14182b; color:var(--text); border:1px solid #2a2f4a; border-radius:12px; padding:10px }
-    code{ background:#121528; padding:2px 6px; border-radius:6px; border:1px solid #262b44 }
+  .panel{ background:#171a2b; border:1px solid #2a2f4a; border-radius:14px; padding:12px }
+  .row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center }
+  .btn{
+    appearance:none; border:none; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600;
+    background:linear-gradient(180deg, #2a2f4a, #222640); color:#e8eafb; box-shadow:0 6px 16px rgba(0,0,0,.25)
+  }
+  .btn:hover{ filter:brightness(1.08) }
+  .btn.ok{ background:linear-gradient(180deg, #124a37, #0f3d2e); color:#b6ffe0 }
+  textarea{ width:100%; min-height:160px; background:#14182b; color:var(--text); border:1px solid #2a2f4a; border-radius:12px; padding:10px }
+  code{ background:#121528; padding:2px 6px; border-radius:6px; border:1px solid #262b44 }
 
-    /* Toujours 1 colonne : preview en dessous */
-    .grid{ display:grid; gap:16px; grid-template-columns: 1fr }
+  .grid{ display:grid; gap:16px; grid-template-columns: 1fr }
 
-    /* Preview – nb colonnes piloté par la var CSS --cols */
-    .list-grid{ display:grid; grid-template-columns: repeat(var(--cols,2), 1fr); gap:16px }
-    .list{ display:flex; flex-direction:column; gap:10px }
-    .year-head{ margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; border-left:3px solid #2a2f4a; border-radius:6px }
-    .item{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:#151a2d; border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px }
-    .card{ display:grid; grid-template-columns: 64px 1fr auto; gap:12px; align-items:center; background:#151a2d; border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px }
-    .thumb{ width:64px; height:90px; border-radius:8px; object-fit:cover; display:block; background:#0f1220; border:1px solid #2a2f4a }
-    .title-wrap{ display:flex; flex-direction:column }
-    .title-wrap .t{ font-weight:600 }
-    .tag{ margin-top:4px; width:max-content; border:1px solid #32375a; border-radius:999px; padding:4px 8px; font-size:12px; color:#e6e8ef; background:#2a2f4a }
-    .year{ color:var(--muted) }
-    .empty{ opacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:center }
+  /* Preview – nb colonnes via --cols */
+  .list-grid{ display:grid; grid-template-columns: repeat(var(--cols,2), 1fr); gap:16px }
+  .list{ display:flex; flex-direction:column; gap:10px }
+  .year-head{ margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; border-left:3px solid #2a2f4a; border-radius:6px }
+  .item{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:#151a2d; border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px }
+  .card{ display:grid; grid-template-columns: 64px 1fr auto; gap:12px; align-items:center; background:#151a2d; border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px }
+  .thumb{ width:64px; height:90px; border-radius:8px; object-fit:cover; display:block; background:#0f1220; border:1px solid #2a2f4a }
+  .title-wrap{ display:flex; flex-direction:column }
+  .title-wrap .t{ font-weight:600 }
+  .year{ color:var(--muted) }
+  .empty{ opacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:center }
 
-    footer{ max-width:1200px; margin:32px auto 40px; padding:0 16px; color:var(--muted); text-align:center }
-    label.inline{ display:inline-flex; align-items:center; gap:8px }
-    .switch{ display:inline-flex; gap:10px; background:#121528; border:1px solid #272c49; padding:6px; border-radius:999px }
-    .switch button{ border:none; background:transparent; color:#c8cfe0; padding:6px 10px; border-radius:999px; cursor:pointer }
-    .switch button.active{ background:#2a2f4a; color:#fff }
+  footer{ max-width:1200px; margin:32px auto 40px; padding:0 16px; color:var(--muted); text-align:center }
 
-    select.slim{ appearance:none; background:#121528; color:#e6e8ef; border:1px solid #2a2f4a; padding:8px 10px; border-radius:10px; font-weight:600 }
-  </style>
+  .switch{ display:inline-flex; gap:10px; background:#121528; border:1px solid #272c49; padding:6px; border-radius:999px }
+  .switch button{ border:none; background:transparent; color:#c8cfe0; padding:6px 10px; border-radius:999px; cursor:pointer }
+  .switch button.active{ background:#2a2f4a; color:#fff }
+  select.slim{ appearance:none; background:#121528; color:#e6e8ef; border:1px solid #2a2f4a; padding:8px 10px; border-radius:10px; font-weight:600 }
+</style>
 </head>
 <body>
-  <header>
-    <div class="wrap">
-      <div class="row" style="justify-content:space-between">
-        <div class="brand"><div class="logo"></div><div class="title">OtomeList · AniList Import</div></div>
-      </div>
+<header>
+  <div class="wrap">
+    <div class="row" style="justify-content:space-between">
+      <div class="brand"><div class="logo"></div><div class="title">OtomeList · AniList Import</div></div>
     </div>
-  </header>
+  </div>
+</header>
 
-  <main>
-    <div class="wrap grid">
-      <!-- Input -->
-      <div class="panel">
-        <div class="row" style="justify-content:space-between; margin-bottom:8px">
-          <strong>Paste AniList links</strong>
-          <div class="row" style="gap:6px">
-            <button class="btn" id="btn-eg">Example</button>
-            <button class="btn ok" id="btn-fetch">Fetch</button>
-          </div>
+<main>
+  <div class="wrap grid">
+    <!-- Input -->
+    <div class="panel">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px">
+        <strong>Paste AniList links</strong>
+        <div class="row" style="gap:6px">
+          <button class="btn" id="btn-eg">Example</button>
+          <button class="btn ok" id="btn-fetch">Fetch</button>
         </div>
-        <p style="opacity:.85">One URL per line. Supports <code>https://anilist.co/anime/ID</code> or <code>https://anilist.co/manga/ID</code>.</p>
-        <textarea id="urls" placeholder="https://anilist.co/anime/5114
+      </div>
+      <p style="opacity:.85">One URL per line. Supports <code>https://anilist.co/anime/ID</code> or <code>https://anilist.co/manga/ID</code>.</p>
+      <textarea id="urls" placeholder="https://anilist.co/anime/5114
 https://anilist.co/manga/30002"></textarea>
 
-        <div style="margin-top:12px; display:flex; align-items:center; gap:18px; flex-wrap:wrap">
-          <div>
-            <label class="inline" style="margin-right:8px">Tag mode:</label>
-            <div class="switch">
-              <button id="mode-auto" class="active">Auto (Anime/Manga)</button>
-              <button id="mode-none">None (title + year)</button>
-            </div>
-          </div>
-          <div>
-            <label class="inline" style="margin-right:8px">Images:</label>
-            <div class="switch">
-              <button id="img-on" class="active">On</button>
-              <button id="img-off">Off</button>
-            </div>
-          </div>
-          <div>
-            <label class="inline" style="margin-right:8px">Columns:</label>
-            <select id="colSel" class="slim">
-              <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
-            </select>
+      <div style="margin-top:12px; display:flex; align-items:center; gap:18px; flex-wrap:wrap">
+        <div>
+          <label style="margin-right:8px">Images:</label>
+          <div class="switch">
+            <button id="img-on" class="active">On</button>
+            <button id="img-off">Off</button>
           </div>
         </div>
-
-        <div style="margin-top:12px" class="row">
-          <button class="btn" id="btn-export">Export PNG</button>
-          <button class="btn" id="btn-copy">Copy as text</button>
+        <div>
+          <label style="margin-right:8px">Columns:</label>
+          <select id="colSel" class="slim">
+            <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+          </select>
+        </div>
+        <div>
+          <label style="margin-right:8px">Sort by year:</label>
+          <div class="switch">
+            <button id="sort-year-on" class="active">On</button>
+            <button id="sort-year-off">Off</button>
+          </div>
+        </div>
+        <div>
+          <label style="margin-right:8px">Append year in title:</label>
+          <div class="switch">
+            <button id="append-year-on">On</button>
+            <button id="append-year-off" class="active">Off</button>
+          </div>
         </div>
       </div>
 
-      <!-- Preview -->
-      <div class="panel">
-        <div class="row" style="justify-content:space-between; margin-bottom:8px">
-          <strong>Preview</strong>
-          <div class="row" style="gap:6px">
-            <select id="sortSel" class="slim">
-              <option value="yearDesc">Year ↓</option>
-              <option value="yearAsc">Year ↑</option>
-              <option value="titleAsc">Title A→Z</option>
-              <option value="titleDesc">Title Z→A</option>
-            </select>
-          </div>
-        </div>
-        <div id="cols" class="list-grid" style="--cols:3"></div>
-        <div id="empty" class="empty" style="display:none; margin-top:10px">No results yet. Paste links and click Fetch.</div>
-      </div>
-
-      <!-- Export preview -->
-      <div id="exportArea" style="display:none; margin-top:16px">
-        <div class="panel">
-          <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px">
-            <strong>Export preview</strong>
-            <a id="dl" class="btn" download="anilist-export.png">Download</a>
-          </div>
-          <img id="img" alt="PNG preview" style="max-width:100%; border:1px solid #2a2f4a; border-radius:10px"/>
-        </div>
+      <div style="margin-top:12px" class="row">
+        <button class="btn" id="btn-export">Export PNG</button>
+        <button class="btn" id="btn-copy">Copy as text</button>
       </div>
     </div>
-  </main>
 
-  <footer>@ <span id="year"></span> OtomeList</footer>
+    <!-- Preview -->
+    <div class="panel">
+      <div class="row" style="justify-content:space-between; margin-bottom:8px">
+        <strong>Preview</strong>
+      </div>
+      <div id="cols" class="list-grid" style="--cols:3"></div>
+      <div id="empty" class="empty" style="display:none; margin-top:10px">No results yet. Paste links and click Fetch.</div>
+    </div>
+
+    <!-- Export preview -->
+    <div id="exportArea" style="display:none; margin-top:16px">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px">
+          <strong>Export preview</strong>
+          <a id="dl" class="btn" download="anilist-export.png">Download</a>
+        </div>
+        <img id="img" alt="PNG preview" style="max-width:100%; border:1px solid #2a2f4a; border-radius:10px"/>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>@ <span id="year"></span> OtomeList</footer>
 
 <script>
 (function(){
@@ -155,23 +151,31 @@ https://anilist.co/manga/30002"></textarea>
   const on = (n,e,f)=> n && n.addEventListener(e,f);
   $('#year').textContent = new Date().getFullYear();
 
-  let TAG_MODE = 'auto';
+  // State toggles
   let SHOW_IMAGE = true;
-  let COLS = 3;              // 1..5
+  let COLS = 3;                    // 1..5
+  let SORT_BY_YEAR = true;         // group + year headers when true
+  let APPEND_YEAR = false;         // append (YYYY) after title
 
   // Refs
   const urls = $('#urls'), btnEg = $('#btn-eg'), btnFetch = $('#btn-fetch'),
         btnExport = $('#btn-export'), btnCopy = $('#btn-copy'),
-        modeAuto = $('#mode-auto'), modeNone = $('#mode-none'),
         imgOn = $('#img-on'), imgOff = $('#img-off'),
-        sortSel = $('#sortSel'), colSel = $('#colSel'),
-        colsWrap = $('#cols'),
-        empty = $('#empty'), exportArea = $('#exportArea'), img = $('#img'), dl = $('#dl');
+        sortYearOn = $('#sort-year-on'), sortYearOff = $('#sort-year-off'),
+        appendYearOn = $('#append-year-on'), appendYearOff = $('#append-year-off'),
+        colSel = $('#colSel'),
+        colsWrap = $('#cols'), empty = $('#empty'),
+        exportArea = $('#exportArea'), img = $('#img'), dl = $('#dl');
 
-  on(modeAuto,'click', ()=>{ TAG_MODE='auto'; modeAuto.classList.add('active'); modeNone.classList.remove('active'); render(); });
-  on(modeNone,'click', ()=>{ TAG_MODE='none'; modeNone.classList.add('active'); modeAuto.classList.remove('active'); render(); });
   on(imgOn,'click', ()=>{ SHOW_IMAGE=true; imgOn.classList.add('active'); imgOff.classList.remove('active'); render(); });
   on(imgOff,'click', ()=>{ SHOW_IMAGE=false; imgOff.classList.add('active'); imgOn.classList.remove('active'); render(); });
+
+  on(sortYearOn,'click', ()=>{ SORT_BY_YEAR=true; sortYearOn.classList.add('active'); sortYearOff.classList.remove('active'); render(); });
+  on(sortYearOff,'click', ()=>{ SORT_BY_YEAR=false; sortYearOff.classList.add('active'); sortYearOn.classList.remove('active'); render(); });
+
+  on(appendYearOn,'click', ()=>{ APPEND_YEAR=true; appendYearOn.classList.add('active'); appendYearOff.classList.remove('active'); render(); });
+  on(appendYearOff,'click', ()=>{ APPEND_YEAR=false; appendYearOff.classList.add('active'); appendYearOn.classList.remove('active'); render(); });
+
   on(colSel,'change', ()=>{ COLS = Math.max(1, Math.min(5, parseInt(colSel.value,10)||3)); colsWrap.style.setProperty('--cols', COLS); render(); });
 
   const API = 'https://graphql.anilist.co';
@@ -186,14 +190,12 @@ https://anilist.co/manga/30002"></textarea>
   function parseId(u){
     try{
       const s = String(u).trim();
-      if (/^\d+$/.test(s)) return { id: parseInt(s,10), kind: 'anime' };
+      if (/^\d+$/.test(s)) return { id: parseInt(s,10) };
       const url = new URL(s);
       const parts = url.pathname.split('/').filter(Boolean);
-      const type = (parts[0]||'').toLowerCase();
       const id = parseInt(parts[1],10);
       if(!id) return null;
-      if(type!=='anime'&&type!=='manga') return null;
-      return { id, kind:type };
+      return { id };
     }catch{return null;}
   }
 
@@ -204,9 +206,8 @@ https://anilist.co/manga/30002"></textarea>
     const m = json.data && json.data.Media;
     const year = m.seasonYear || (m.startDate&&m.startDate.year) || null;
     const title = m.title.romaji || m.title.english || m.title.native || 'Unknown';
-    const type = (TAG_MODE==='auto') ? (m.type==='ANIME'?'Anime':'Manga') : null;
     const image = (m.coverImage && (m.coverImage.large || m.coverImage.medium)) || null;
-    return { title, year, type, image };
+    return { title, year, image };
   }
 
   async function fetchAll(list){
@@ -220,69 +221,93 @@ https://anilist.co/manga/30002"></textarea>
 
   let state=[];
 
-  // -------- Layout balancing (N colonnes) ----------
-  function buildColumns(groups, years, wantImages, nCols){
-    const thumbH = 90, rowBase = 42, headH = 30, vGap = 12;
-    const rowH = wantImages ? (thumbH + 18) : rowBase;
-
-    const cols = Array.from({length:nCols}, ()=>({blocks:[], score:0}));
-    for(const y of years){
-      const items = groups.get(y);
-      const est = 1 + items.length;      // même heuristique que le preview d’origine
-      // place le bloc dans la colonne la moins “haute”
-      let best = 0;
-      for(let i=1;i<nCols;i++) if(cols[i].score < cols[best].score) best = i;
-      cols[best].blocks.push({year:y, items});
-      cols[best].score += est;
+  // -------- utils --------
+  function fitText(ctx, text, maxW){
+    if (ctx.measureText(text).width <= maxW) return text;
+    const ell = '…', ellW = ctx.measureText(ell).width;
+    let lo=0, hi=text.length;
+    while(lo<hi){
+      const mid = Math.floor((lo+hi+1)/2);
+      if (ctx.measureText(text.slice(0,mid)).width + ellW <= maxW) lo=mid; else hi=mid-1;
     }
-
-    // fonction hauteur réelle (px) d'une colonne
-    const heightOf = (c)=> c.blocks.reduce((h,b,i)=> h + (i>0?vGap:0) + headH + b.items.length*rowH, 0);
-
-    return { cols, heightOf, rowH, headH, vGap };
+    return text.slice(0,lo) + ell;
   }
 
-  // --------------- PREVIEW RENDER ------------------
-  function render(){
-    if(!state.length){
-      empty.style.display='block'; colsWrap.innerHTML=''; return;
+  // -------- layout balancing (N cols) --------
+  function buildColumns(items){
+    // sort
+    const sorted = items.slice().sort((a,b)=>{
+      if(SORT_BY_YEAR){
+        return (b.year||0)-(a.year||0) || a.title.localeCompare(b.title);
+      } else {
+        return a.title.localeCompare(b.title) || (b.year||0)-(a.year||0);
+      }
+    });
+
+    const thumbH = 90, rowBase = 42, headH = 30, vGap = 12;
+    const rowH = SHOW_IMAGE ? (thumbH + 18) : rowBase;
+
+    if (SORT_BY_YEAR){
+      // group by year blocks
+      const groups = new Map();
+      for(const it of sorted){ const y=it.year||'–'; if(!groups.has(y)) groups.set(y,[]); groups.get(y).push(it); }
+      const years = Array.from(groups.keys()).sort((a,b)=> (b==='–')-(a==='–') || b-a);
+
+      const cols = Array.from({length:COLS}, ()=>({blocks:[], score:0}));
+      for(const y of years){
+        const items=groups.get(y);
+        const est = 1 + items.length;
+        let best=0; for(let i=1;i<COLS;i++) if(cols[i].score<cols[best].score) best=i;
+        cols[best].blocks.push({year:y, items});
+        cols[best].score += est;
+      }
+      const heightOf = (c)=> c.blocks.reduce((h,b,i)=> h + (i>0?vGap:0) + headH + b.items.length*rowH, 0);
+      return { mode:'year', cols, heightOf, rowH, headH, vGap };
+    }else{
+      // flat distribution (no headers)
+      const cols = Array.from({length:COLS}, ()=>({items:[], score:0}));
+      for(const it of sorted){
+        let best=0; for(let i=1;i<COLS;i++) if(cols[i].score<cols[best].score) best=i;
+        cols[best].items.push(it); cols[best].score += 1;
+      }
+      const heightOf = (c)=> c.items.length*rowH;
+      return { mode:'flat', cols, heightOf, rowH, headH:0, vGap:12 };
     }
+  }
+
+  // --------------- PREVIEW ------------------
+  function render(){
+    if(!state.length){ empty.style.display='block'; colsWrap.innerHTML=''; return; }
     empty.style.display='none';
     colsWrap.innerHTML=''; colsWrap.style.setProperty('--cols', COLS);
 
-    const s = sortSel.value || 'yearDesc';
-    const items = state.slice().sort((a,b)=>{
-      if(s==='yearDesc') return (b.year||0)-(a.year||0) || a.title.localeCompare(b.title);
-      if(s==='yearAsc')  return (a.year||0)-(b.year||0) || a.title.localeCompare(b.title);
-      if(s==='titleAsc') return a.title.localeCompare(b.title) || ((b.year||0)-(a.year||0));
-      if(s==='titleDesc')return b.title.localeCompare(a.title) || ((b.year||0)-(a.year||0));
-      return 0;
-    });
+    const L = buildColumns(state);
+    const makeTitle = (it)=> APPEND_YEAR && it.year ? `${it.title} (${it.year})` : it.title;
 
-    const groups = new Map();
-    for(const it of items){
-      const y=it.year||'–';
-      if(!groups.has(y)) groups.set(y,[]);
-      groups.get(y).push(it);
-    }
-    const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? ((a==='–')-(b==='–')||a-b) : ((b==='–')-(a==='–')||b-a));
-
-    const { cols } = buildColumns(groups, years, SHOW_IMAGE, COLS);
-
-    // Crée N colonnes et les remplit
-    for(const c of cols){
-      const column = document.createElement('section');
-      column.className = 'list';
-      for(const block of c.blocks){
+    for(const c of L.cols){
+      const column = document.createElement('section'); column.className = 'list';
+      if(L.mode==='year'){
+        for(const block of c.blocks){
+          const container=document.createElement('div');
+          container.innerHTML=`<div class="year-head">${block.year==='–'?'Unknown':block.year} —</div>`;
+          for(const it of block.items){
+            const hasImg = SHOW_IMAGE && it.image;
+            const row=document.createElement('div'); row.className=hasImg?'card':'item';
+            row.innerHTML = hasImg
+              ? `<img class="thumb" src="${it.image}" loading="lazy" alt=""><div class="title-wrap"><span class="t">${makeTitle(it)}</span></div><span class="year">${it.year||'–'}</span>`
+              : `<span></span><span>${makeTitle(it)}</span><span class="year">${it.year||'–'}</span>`;
+            container.appendChild(row);
+          }
+          column.appendChild(container);
+        }
+      }else{
         const container=document.createElement('div');
-        container.innerHTML=`<div class="year-head">${block.year==='–'?'Unknown':block.year} —</div>`;
-        for(const it of block.items){
+        for(const it of c.items){
           const hasImg = SHOW_IMAGE && it.image;
           const row=document.createElement('div'); row.className=hasImg?'card':'item';
-          const tag = (TAG_MODE==='auto' && it.type)?`<span class="tag">${it.type}</span>`:'';
           row.innerHTML = hasImg
-            ? `<img class="thumb" src="${it.image}" loading="lazy" alt=""><div class="title-wrap"><span class="t">${it.title}</span>${tag}</div><span class="year">${it.year||'–'}</span>`
-            : `${tag}<span>${it.title}</span><span class="year">${it.year||'–'}</span>`;
+            ? `<img class="thumb" src="${it.image}" loading="lazy" alt=""><div class="title-wrap"><span class="t">${makeTitle(it)}</span></div><span class="year">${it.year||'–'}</span>`
+            : `<span></span><span>${makeTitle(it)}</span><span class="year">${it.year||'–'}</span>`;
           container.appendChild(row);
         }
         column.appendChild(container);
@@ -293,13 +318,12 @@ https://anilist.co/manga/30002"></textarea>
 
   function toText(){
     return state.map(it=>{
-      const core = `${it.title} (${it.year||''})`.trim();
-      if(TAG_MODE==='auto' && it.type){ return `[${it.type}] ${core}`; }
-      return core;
+      const base = APPEND_YEAR && it.year ? `${it.title} (${it.year})` : it.title;
+      return it.year ? `${base} (${it.year})` : base;
     }).join('\n');
   }
 
-  // --- Export helpers (images + shapes) ---
+  // --- Export helpers ---
   function rrect(ctx,x,y,w,h,r=12){
     ctx.beginPath();
     ctx.moveTo(x+r,y);
@@ -330,40 +354,35 @@ https://anilist.co/manga/30002"></textarea>
     });
   }
 
-  // ---------------- EXPORT (N colonnes) -----------------
+  // --------------- EXPORT (N colonnes, identique preview) -----------------
   async function exportPNG(){
     if(!state.length){ alert('Nothing to export'); return; }
 
-    const s = sortSel.value || 'yearDesc';
-    const groups = new Map();
-    for(const it of state){ const y = it.year || '–'; if(!groups.has(y)) groups.set(y, []); groups.get(y).push(it); }
-    const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? ((a==='–')-(b==='–')||a-b) : ((b==='–')-(a==='–')||b-a));
+    const L = buildColumns(state);
 
-    const WANT_IMG = SHOW_IMAGE === true;
-
-    // Précharge les images seulement si ON
+    // Preload covers (only if needed)
     const coverMap = new Map();
-    if(WANT_IMG){
-      for(const y of years){
-        for(const it of groups.get(y)){
-          if(it.image && !coverMap.has(it)){
-            try{ coverMap.set(it, await loadCover(it.image)); }catch(_){}
-          }
+    if(SHOW_IMAGE){
+      const all = [];
+      if(L.mode==='year'){
+        for(const c of L.cols) for(const b of c.blocks) for(const it of b.items) if(it.image) all.push(it);
+      }else{
+        for(const c of L.cols) for(const it of c.items) if(it.image) all.push(it);
+      }
+      for(const it of all){
+        if(!coverMap.has(it)){
+          try{ coverMap.set(it, await loadCover(it.image)); }catch(_){}
         }
       }
     }
 
-    // Calcul colonnes (même logique que preview)
-    const { cols, heightOf, rowH, headH, vGap } = buildColumns(groups, years, WANT_IMG, COLS);
-
-    // Dimensions canvas
+    // Canvas dims
     const DPR = Math.max(1, window.devicePixelRatio||1);
-    const pad=24, gutter=16;
-    const totalWidth = 1200;                                   // largeur cible
-    const width = Math.max(900, totalWidth);                   // minimum
+    const pad=24, gutter=16, totalWidth=1200;
+    const width = Math.max(900,totalWidth);
     const colW = Math.floor((width - pad*2 - gutter*(COLS-1)) / COLS);
     const titleH = 18 + 6;
-    const innerH = Math.max(...cols.map(c=>heightOf(c)));
+    const innerH = Math.max(...L.cols.map(c=>L.heightOf(c)));
     const height = pad + titleH + 8 + innerH + pad;
 
     const canvas = document.createElement('canvas');
@@ -372,70 +391,93 @@ https://anilist.co/manga/30002"></textarea>
     canvas.style.width = width+'px'; canvas.style.height = height+'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
 
-    // Fond + titre
+    // BG + title
     ctx.fillStyle = '#0f1220'; ctx.fillRect(0,0,width,height);
     ctx.fillStyle = '#e6e8ef';
     ctx.font = '600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
     ctx.fillText('OtomeList · AniList Import', pad, pad-6+18);
 
-    // Dessin colonnes
+    const thumbW=64, thumbH=90, gap=12;
+    const rowH = L.rowH, headH = L.headH, vGap = L.vGap;
+
+    function drawTitle(x, y, text, rightX){
+      ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      ctx.fillStyle='#e6e8ef';
+      const maxW = rightX - x - 8; // avoid year
+      const txt = fitText(ctx, text, maxW);
+      ctx.fillText(txt, x, y);
+    }
+
+    const makeTitle = (it)=> APPEND_YEAR && it.year ? `${it.title} (${it.year})` : it.title;
+
     for(let i=0;i<COLS;i++){
       const xStart = pad + i*(colW + gutter);
       let y = pad + titleH + 8;
-      const c = cols[i];
-      for(let bi=0; bi<c.blocks.length; bi++){
-        const block = c.blocks[bi];
-        if(bi>0){ y += vGap; }
-        // année
-        ctx.fillStyle = '#9aa3b2';
-        ctx.font = '700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-        ctx.fillText(String(block.year==='–'?'Unknown':block.year)+' —', xStart, y);
-        y += headH;
 
-        // items
-        for(const it of block.items){
-          // carte
+      if(L.mode==='year'){
+        for(let bi=0; bi<L.cols[i].blocks.length; bi++){
+          const block = L.cols[i].blocks[bi];
+          if(bi>0){ y += vGap; }
+          // Year header
+          ctx.fillStyle='#9aa3b2';
+          ctx.font='700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+          ctx.fillText(String(block.year==='–'?'Unknown':block.year)+' —', xStart, y);
+          y += headH;
+
+          for(const it of block.items){
+            // card
+            ctx.save();
+            rrect(ctx, xStart-2, y-22, colW + 4, rowH-6, 12);
+            ctx.fillStyle='#151a2d'; ctx.fill();
+            ctx.lineWidth=1; ctx.strokeStyle='#2a2f4a'; ctx.stroke();
+            ctx.restore();
+
+            const leftText = xStart + (SHOW_IMAGE ? (thumbW+gap) : 0);
+            const rightX = xStart + colW - 12;
+
+            // image
+            const cover = SHOW_IMAGE ? coverMap.get(it) : null;
+            if(cover){
+              ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip();
+              ctx.drawImage(cover.img, xStart, y-18, thumbW, thumbH); ctx.restore();
+            }
+
+            // title
+            drawTitle(leftText, y-18+16, makeTitle(it), rightX);
+
+            // year right
+            const ys = String(it.year||'');
+            const yw = ctx.measureText(ys).width;
+            ctx.fillStyle='#9aa3b2';
+            ctx.fillText(ys, rightX - yw, y-18+16);
+
+            y += rowH;
+          }
+        }
+      }else{
+        for(const it of L.cols[i].items){
+          // card
           ctx.save();
           rrect(ctx, xStart-2, y-22, colW + 4, rowH-6, 12);
           ctx.fillStyle='#151a2d'; ctx.fill();
           ctx.lineWidth=1; ctx.strokeStyle='#2a2f4a'; ctx.stroke();
           ctx.restore();
 
-          const thumbW=64, thumbH=90, gap=12;
-          const leftText = xStart + (WANT_IMG ? (thumbW+gap) : 0);
+          const leftText = xStart + (SHOW_IMAGE ? (thumbW+gap) : 0);
+          const rightX = xStart + colW - 12;
 
-          // vignette
-          const cover = WANT_IMG ? coverMap.get(it) : null;
+          const cover = SHOW_IMAGE ? coverMap.get(it) : null;
           if(cover){
-            ctx.save();
-            rrect(ctx, xStart, y-18, thumbW, thumbH, 8);
-            ctx.clip();
-            ctx.drawImage(cover.img, xStart, y-18, thumbW, thumbH);
-            ctx.restore();
+            ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip();
+            ctx.drawImage(cover.img, xStart, y-18, thumbW, thumbH); ctx.restore();
           }
 
-          // tag
-          const useTag = (TAG_MODE==='auto' && it.type);
-          let titleX = leftText;
-          if(useTag){
-            const tag = it.type;
-            ctx.font='12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-            const tagPadX=10, tagH=24, tagW = Math.ceil(ctx.measureText(tag).width)+tagPadX*2;
-            ctx.save(); rrect(ctx, titleX, y-18, tagW, tagH, 12); ctx.fillStyle='#2a2f4a'; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle='#32375a'; ctx.stroke(); ctx.restore();
-            ctx.fillStyle='#e6e8ef'; ctx.fillText(tag, titleX+tagPadX, y-18+16);
-            titleX += tagW + 12;
-          }
+          drawTitle(leftText, y-18+16, makeTitle(it), rightX);
 
-          // titre
-          ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
-          ctx.fillStyle='#e6e8ef';
-          ctx.fillText(it.title, titleX, y-18+16);
-
-          // année
           const ys = String(it.year||'');
           const yw = ctx.measureText(ys).width;
           ctx.fillStyle='#9aa3b2';
-          ctx.fillText(ys, xStart + colW - 12 - yw, y-18+16);
+          ctx.fillText(ys, rightX - yw, y-18+16);
 
           y += rowH;
         }
@@ -478,8 +520,6 @@ https://anilist.co/manga/30002"></textarea>
       }catch(_){ alert('Copy failed.'); }
     })();
   });
-
-  on(sortSel,'change', render);
 })();
 </script>
 </body>
