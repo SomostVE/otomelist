@@ -345,10 +345,17 @@ https://anilist.co/manga/30002"></textarea>
     }).join('\n');
   }
 
-  // ---------- EXPORT PNG avec fallback CORS fiable ----------
-  // Proxy CORS : concatène directement l'URL d'origine après r.jina.ai/
-  const PROXY = 'https://r.jina.ai/';
-  function proxyUrl(u){ return PROXY + u; }
+  // ---------- EXPORT PNG avec fallback CORS via images.weserv.nl ----------
+  // IMPORTANT: weserv attend host+path SANS protocole et NON encodés
+  const PROXY = 'https://images.weserv.nl/?url=';
+  function proxyUrl(u){
+    try{
+      const withoutProto = u.replace(/^https?:\/\//,'');
+      return PROXY + withoutProto; // pas d'encodeURIComponent
+    }catch{
+      return u;
+    }
+  }
 
   async function loadImageElement(url){
     return new Promise((resolve, reject)=>{
@@ -362,7 +369,6 @@ https://anilist.co/manga/30002"></textarea>
   }
 
   async function fetchBitmapVia(url){
-    // Si createImageBitmap existe, on privilégie le pipeline fetch->blob->bitmap
     if (window.createImageBitmap){
       const res = await fetch(url, { mode:'cors', credentials:'omit' });
       if(!res.ok) throw new Error('fetch failed');
@@ -370,19 +376,17 @@ https://anilist.co/manga/30002"></textarea>
       if(!blob || !blob.size) throw new Error('empty blob');
       return await createImageBitmap(blob);
     }
-    // Fallback DOM image (HTMLImageElement), compatible Safari iOS
     return await loadImageElement(url);
   }
 
   async function loadCoverForExport(url){
-    // 1) Tente l'URL d'origine (identique au preview)
     try{
-      const bmp = await fetchBitmapVia(url);
+      const bmp = await fetchBitmapVia(url);              // 1) tenter l'URL d'origine
       coverBitmapCache.set(url, bmp);
       return { bmp, used:url };
     }catch(_){}
 
-    // 2) Fallback : proxy CORS
+    // 2) fallback proxy weserv (CORS OK)
     const purl = proxyUrl(url);
     try{
       const bmp = await fetchBitmapVia(purl);
