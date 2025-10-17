@@ -9,7 +9,7 @@
   *{ box-sizing:border-box }
   html,body{ height:100% }
 
-  /* Fixed background (no repeating seams) */
+  /* Fixed, non-repeating background */
   body{
     margin:0;
     background-color:var(--bg);
@@ -69,7 +69,6 @@
   .switch button{ border:none; background:transparent; color:#c8cfe0; padding:6px 10px; border-radius:999px; cursor:pointer }
   .switch button.active{ background:#2a2f4a; color:#fff }
   select.slim{ appearance:none; background:#121528; color:#e6e8ef; border:1px solid #2a2f4a; padding:8px 10px; border-radius:10px; font-weight:600 }
-  small.note{ color:#9aa3b2 }
 </style>
 </head>
 <body>
@@ -132,14 +131,6 @@ https://anilist.co/manga/30002"></textarea>
             <button id="append-year-off" class="active">Off</button>
           </div>
         </div>
-        <div>
-          <label style="margin-right:8px">Image proxy for export:</label>
-          <div class="switch">
-            <button id="proxy-on" class="active">On</button>
-            <button id="proxy-off">Off</button>
-          </div>
-          <small class="note">Fixes export images on strict CDNs</small>
-        </div>
       </div>
 
       <div style="margin-top:12px" class="row">
@@ -184,7 +175,6 @@ https://anilist.co/manga/30002"></textarea>
   let GROUP_BY_YEAR = true;        // headers when true
   let APPEND_YEAR = false;         // append (YYYY) after title
   let SORT_MODE = 'yearDesc';      // yearDesc | yearAsc | titleAsc | titleDesc
-  let USE_PROXY = true;            // proxy covers for export to avoid CORS taint
 
   // Refs
   const urls = $('#urls'), btnEg = $('#btn-eg'), btnFetch = $('#btn-fetch'),
@@ -193,7 +183,6 @@ https://anilist.co/manga/30002"></textarea>
         groupYearOn = $('#group-year-on'), groupYearOff = $('#group-year-off'),
         sortSel = $('#sortSel'),
         appendYearOn = $('#append-year-on'), appendYearOff = $('#append-year-off'),
-        proxyOn = $('#proxy-on'), proxyOff = $('#proxy-off'),
         colSel = $('#colSel'),
         colsWrap = $('#cols'), empty = $('#empty'),
         exportArea = $('#exportArea'), img = $('#img'), dl = $('#dl');
@@ -206,9 +195,6 @@ https://anilist.co/manga/30002"></textarea>
 
   on(appendYearOn,'click', ()=>{ APPEND_YEAR=true; appendYearOn.classList.add('active'); appendYearOff.classList.remove('active'); render(); });
   on(appendYearOff,'click', ()=>{ APPEND_YEAR=false; appendYearOff.classList.add('active'); appendYearOn.classList.remove('active'); render(); });
-
-  on(proxyOn,'click', ()=>{ USE_PROXY=true; proxyOn.classList.add('active'); proxyOff.classList.remove('active'); });
-  on(proxyOff,'click', ()=>{ USE_PROXY=false; proxyOff.classList.add('active'); proxyOn.classList.remove('active'); });
 
   on(colSel,'change', ()=>{ COLS = Math.max(1, Math.min(5, parseInt(colSel.value,10)||3)); colsWrap.style.setProperty('--cols', COLS); render(); });
   on(sortSel,'change', ()=>{ SORT_MODE = sortSel.value; render(); });
@@ -255,9 +241,8 @@ https://anilist.co/manga/30002"></textarea>
   }
 
   let state=[];
-  const coverCache = new Map(); // fetchedURL -> ImageBitmap|HTMLImageElement
+  const coverBitmapCache = new Map(); // url => ImageBitmap
 
-  // -------- utils --------
   function fitText(ctx, text, maxW){
     if (ctx.measureText(text).width <= maxW) return text;
     const ell = '…', ellW = ctx.measureText(ell).width;
@@ -279,24 +264,14 @@ https://anilist.co/manga/30002"></textarea>
     });
   }
 
-  function proxify(url){
-    if(!USE_PROXY || !url) return url;
-    // images.weserv.nl expects hostless path
-    const noProto = url.replace(/^https?:\/\//,'');
-    return `https://images.weserv.nl/?url=${encodeURIComponent(noProto)}&w=256&h=360&fit=cover`;
-  }
-
-  // -------- layout balancing (N cols) --------
   function buildColumns(items){
     const sorted = sortItems(items);
-
     const thumbH = 90, rowBase = 42, headH = 30, vGap = 12;
     const rowH = SHOW_IMAGE ? (thumbH + 18) : rowBase;
 
     if (GROUP_BY_YEAR){
       const groups = new Map();
       for(const it of sorted){ const y=it.year||'–'; if(!groups.has(y)) groups.set(y,[]); groups.get(y).push(it); }
-
       const years = Array.from(groups.keys()).sort((a,b)=>{
         if(SORT_MODE==='yearAsc')  return (a==='–')-(b==='–') || a-b;
         return (b==='–')-(a==='–') || b-a;
@@ -323,7 +298,6 @@ https://anilist.co/manga/30002"></textarea>
     }
   }
 
-  // --------------- PREVIEW ------------------
   function render(){
     if(!state.length){ empty.style.display='block'; colsWrap.innerHTML=''; return; }
     empty.style.display='none';
@@ -371,7 +345,6 @@ https://anilist.co/manga/30002"></textarea>
     }).join('\n');
   }
 
-  // --- Export helpers ---
   function rrect(ctx,x,y,w,h,r=12){
     ctx.beginPath();
     ctx.moveTo(x+r,y);
@@ -382,49 +355,39 @@ https://anilist.co/manga/30002"></textarea>
     ctx.closePath();
   }
 
-  async function loadCover(fetchURL){
-    if(!fetchURL) return null;
-    if(coverCache.has(fetchURL)) return coverCache.get(fetchURL);
+  async function loadBitmap(url){
+    if(!url) return null;
+    if(coverBitmapCache.has(url)) return coverBitmapCache.get(url);
+    // Strictly blob -> ImageBitmap (no proxy, no <img> fallback) to avoid taint.
     try{
-      const r = await fetch(fetchURL,{mode:'cors',referrerPolicy:'no-referrer'});
-      if(r.ok){
-        const b = await r.blob();
-        if(b && b.size){
-          const bmp = await createImageBitmap(b);
-          coverCache.set(fetchURL, bmp);
-          return bmp;
-        }
-      }
-    }catch(_){}
-    // fallback
-    const el = await new Promise((res,rej)=>{
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      try{ img.referrerPolicy = 'no-referrer'; }catch(_){}
-      img.onload = ()=>res(img);
-      img.onerror = ()=>rej(new Error('img load fail'));
-      img.src = fetchURL;
-    }).catch(()=>null);
-    if(el) coverCache.set(fetchURL, el);
-    return el;
+      const res = await fetch(url,{mode:'cors', credentials:'omit', referrerPolicy:'no-referrer'});
+      if(!res.ok) throw new Error('fetch cover failed');
+      const blob = await res.blob();
+      if(!blob || !blob.size) throw new Error('empty blob');
+      const bmp = await createImageBitmap(blob);
+      coverBitmapCache.set(url, bmp);
+      return bmp;
+    }catch(_){
+      // If CORS blocks, we skip that cover (title still renders)
+      return null;
+    }
   }
 
-  // --------------- EXPORT (identique preview) -----------------
   async function exportPNG(){
     if(!state.length){ alert('Nothing to export'); return; }
 
     const L = buildColumns(state);
 
-    // Preload covers (proxy if enabled)
-    const pending = [];
+    // Preload all needed bitmaps (from exact same URLs as preview)
+    const queue = [];
     if(SHOW_IMAGE){
-      const add = it => { if(it.image){ const u = proxify(it.image); if(!coverCache.has(u)) pending.push(u); } };
+      const add = it => { if(it.image && !coverBitmapCache.has(it.image)) queue.push(it.image); };
       if(L.mode==='year'){
         for(const c of L.cols) for(const b of c.blocks) for(const it of b.items) add(it);
       }else{
         for(const c of L.cols) for(const it of c.items) add(it);
       }
-      for(const u of pending){ try{ await loadCover(u); }catch(_){ } }
+      for(const u of queue){ await loadBitmap(u); }
     }
 
     const DPR = Math.max(1, window.devicePixelRatio||1);
@@ -440,7 +403,6 @@ https://anilist.co/manga/30002"></textarea>
     canvas.style.width = width+'px'; canvas.style.height = height+'px';
     ctx.setTransform(DPR,0,0,DPR,0,0);
 
-    // BG + title
     ctx.fillStyle = '#0f1220'; ctx.fillRect(0,0,width,height);
     ctx.fillStyle = '#e6e8ef';
     ctx.font = '600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
@@ -479,9 +441,8 @@ https://anilist.co/manga/30002"></textarea>
             const rightEdge = xStart + colW - 12;
 
             if(SHOW_IMAGE && it.image){
-              const u = proxify(it.image);
-              const imgObj = coverCache.get(u) || await loadCover(u);
-              if(imgObj){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(imgObj, xStart, y-18, thumbW, thumbH); ctx.restore(); }
+              const bmp = coverBitmapCache.get(it.image) || await loadBitmap(it.image);
+              if(bmp){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(bmp, xStart, y-18, thumbW, thumbH); ctx.restore(); }
             }
             drawTitle(leftText, y-18+16, makeTitle(it), rightEdge);
             y += rowH;
@@ -496,9 +457,8 @@ https://anilist.co/manga/30002"></textarea>
           const rightEdge = xStart + colW - 12;
 
           if(SHOW_IMAGE && it.image){
-            const u = proxify(it.image);
-            const imgObj = coverCache.get(u) || await loadCover(u);
-            if(imgObj){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(imgObj, xStart, y-18, thumbW, thumbH); ctx.restore(); }
+            const bmp = coverBitmapCache.get(it.image) || await loadBitmap(it.image);
+            if(bmp){ ctx.save(); rrect(ctx, xStart, y-18, thumbW, thumbH, 8); ctx.clip(); ctx.drawImage(bmp, xStart, y-18, thumbW, thumbH); ctx.restore(); }
           }
           drawTitle(leftText, y-18+16, makeTitle(it), rightEdge);
           y += rowH;
@@ -512,7 +472,6 @@ https://anilist.co/manga/30002"></textarea>
     exportArea.style.display = 'block';
   }
 
-  // ------ UI ------
   on(btnEg,'click', ()=>{ urls.value='https://anilist.co/anime/5114/\nhttps://anilist.co/anime/15315/\nhttps://anilist.co/manga/30002/'; });
 
   on(btnFetch,'click', async()=>{
