@@ -18,32 +18,39 @@
     header{position:sticky; top:0; z-index:5; backdrop-filter:saturate(140%) blur(8px);
            background:linear-gradient(180deg, rgba(15,18,32,0.9) 0%, rgba(15,18,32,0.6) 100%);
            border-bottom:1px solid #262b44}
-    .wrap{max-width:1100px; margin:0 auto; padding:16px}
+    .wrap{max-width:1200px; margin:0 auto; padding:16px}
     .brand{display:flex; gap:10px; align-items:center}
     .logo{width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg, var(--brand), #00e7ff)}
     .title{font-weight:700; letter-spacing:0.3px}
+
     .panel{background:var(--panel); border:1px solid #2a2f4a; border-radius:14px; padding:12px}
     .row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
     .btn{appearance:none; border:none; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600;
          background:linear-gradient(180deg, #2a2f4a, #222640); color:#e8eafb; box-shadow:0 6px 16px rgba(0,0,0,.25)}
     .btn:hover{filter:brightness(1.08)}
     .btn.ok{background:linear-gradient(180deg, #124a37, #0f3d2e); color:#b6ffe0}
-    textarea{width:100%; min-height:140px; background:#14182b; color:var(--text); border:1px solid #2a2f4a; border-radius:12px; padding:10px}
+    textarea{width:100%; min-height:160px; background:#14182b; color:var(--text); border:1px solid #2a2f4a; border-radius:12px; padding:10px}
     code{background:#121528; padding:2px 6px; border-radius:6px; border:1px solid #262b44}
 
-    .grid{display:grid; gap:16px; grid-template-columns: 1fr}
-    @media (min-width: 980px){ .grid{grid-template-columns: 1.1fr 1fr} }
+    .grid{display:grid; gap:16px; grid-template-columns: 1.1fr 1fr}
+    @media (max-width: 980px){ .grid{grid-template-columns: 1fr} }
 
-    /* list rendering (same style as main page) */
-    .list-grid{display:grid; grid-template-columns: 1fr; gap:16px}
-    @media (min-width: 980px){ .list-grid{grid-template-columns: 1fr 1fr;} }
-    .list{display:flex; flex-direction:column; gap:8px}
+    /* list rendering */
+    .list-grid{display:grid; grid-template-columns: 1fr 1fr; gap:16px}
+    @media (max-width: 980px){ .list-grid{grid-template-columns: 1fr} }
+    .list{display:flex; flex-direction:column; gap:10px}
     .year-head{margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; border-left:3px solid #2a2f4a; border-radius:6px}
     .item{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:#151a2d; border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px}
+    .card{display:grid; grid-template-columns: 64px 1fr auto; gap:12px; align-items:center; background:#151a2d; border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px}
+    .thumb{width:64px; height:90px; border-radius:8px; object-fit:cover; display:block; background:#0f1220; border:1px solid #2a2f4a}
+    .title-wrap{display:flex; flex-direction:column}
+    .title-wrap .t{font-weight:600}
+    .title-wrap .tag{margin-top:4px; width:max-content}
     .tag{border:1px solid #32375a; border-radius:999px; padding:4px 8px; font-size:12px; color:#e6e8ef; background:#2a2f4a}
     .year{color:var(--muted)}
+
     .empty{opacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:center}
-    footer{max-width:1100px; margin:32px auto 40px; padding:0 16px; color:var(--muted); text-align:center}
+    footer{max-width:1200px; margin:32px auto 40px; padding:0 16px; color:var(--muted); text-align:center}
     label.inline{display:inline-flex; align-items:center; gap:8px}
     .switch{display:inline-flex; gap:10px; background:#121528; border:1px solid #272c49; padding:6px; border-radius:999px}
     .switch button{border:none; background:transparent; color:#c8cfe0; padding:6px 10px; border-radius:999px; cursor:pointer}
@@ -73,11 +80,20 @@
           <p style="opacity:.85">One URL per line. Supports <code>https://anilist.co/anime/ID</code> or <code>https://anilist.co/manga/ID</code>.</p>
           <textarea id="urls" placeholder="https://anilist.co/anime/5114\nhttps://anilist.co/manga/30002"></textarea>
 
-          <div style="margin-top:12px; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
-            <label class="inline">Tag mode:</label>
-            <div class="switch" role="tablist" aria-label="Tag mode">
-              <button id="mode-auto" class="active" aria-pressed="true">Auto (Anime/Manga)</button>
-              <button id="mode-none" aria-pressed="false">None (title + year)</button>
+          <div style="margin-top:12px; display:flex; align-items:center; gap:18px; flex-wrap:wrap">
+            <div>
+              <label class="inline" style="margin-right:8px">Tag mode:</label>
+              <div class="switch" role="tablist" aria-label="Tag mode">
+                <button id="mode-auto" class="active" aria-pressed="true">Auto (Anime/Manga)</button>
+                <button id="mode-none" aria-pressed="false">None (title + year)</button>
+              </div>
+            </div>
+            <div>
+              <label class="inline" style="margin-right:8px">Images:</label>
+              <div class="switch" role="tablist" aria-label="Images">
+                <button id="img-on" class="active" aria-pressed="true">On</button>
+                <button id="img-off" aria-pressed="false">Off</button>
+              </div>
             </div>
           </div>
 
@@ -135,6 +151,8 @@
   const btnCopy = $('#btn-copy');
   const modeAuto = $('#mode-auto');
   const modeNone = $('#mode-none');
+  const imgOn = $('#img-on');
+  const imgOff = $('#img-off');
   const sortSel = $('#sortSel');
   const col1 = $('#col1');
   const col2 = $('#col2');
@@ -145,11 +163,14 @@
   $('#year').textContent = new Date().getFullYear();
 
   let TAG_MODE = 'auto'; // 'auto' | 'none'
+  let SHOW_IMAGE = true; // toggle images
   on(modeAuto,'click', ()=>{ TAG_MODE='auto'; modeAuto.classList.add('active'); modeNone.classList.remove('active'); render(); });
   on(modeNone,'click', ()=>{ TAG_MODE='none'; modeNone.classList.add('active'); modeAuto.classList.remove('active'); render(); });
+  on(imgOn,'click', ()=>{ SHOW_IMAGE=true; imgOn.classList.add('active'); imgOff.classList.remove('active'); render(); });
+  on(imgOff,'click', ()=>{ SHOW_IMAGE=false; imgOff.classList.add('active'); imgOn.classList.remove('active'); render(); });
 
   const API = 'https://graphql.anilist.co';
-  const query = `query ($id: Int){ Media(id:$id){ id type format title{romaji english native} seasonYear startDate{year} } }`;
+  const query = `query ($id: Int){ Media(id:$id){ id type format title{romaji english native} seasonYear startDate{year} coverImage{large medium color} } }`;
 
   function parseId(u){
     try{ const url=new URL(u.trim()); const parts=url.pathname.split('/').filter(Boolean); const type=parts[0]; const id=parseInt(parts[1],10); if(!id||!(type==='anime'||type==='manga')) return null; return {id, kind:type}; }catch{ return null; }
@@ -164,7 +185,9 @@
     const year = m.seasonYear || (m.startDate && m.startDate.year) || null;
     const title = m.title.romaji || m.title.english || m.title.native || 'Unknown';
     const type = (TAG_MODE==='auto') ? (m.type==='ANIME'?'Anime':'Manga') : null;
-    return { title, year, type };
+    const image = (m.coverImage && (m.coverImage.large || m.coverImage.medium)) || null;
+    const color = (m.coverImage && m.coverImage.color) || null;
+    return { title, year, type, image, color };
   }
 
   async function fetchAll(list){
@@ -200,9 +223,16 @@
       const container=document.createElement('div');
       const head=document.createElement('div'); head.className='year-head'; head.textContent = (y==='–'?'Unknown':y)+' —'; container.appendChild(head);
       for(const it of groups.get(y)){
-        const row=document.createElement('div'); row.className='item';
+        const hasImg = SHOW_IMAGE && it.image;
+        const row=document.createElement('div'); row.className= hasImg ? 'card' : 'item';
         const tag = (TAG_MODE==='auto' && it.type) ? `<span class="tag">${it.type}</span>` : '';
-        row.innerHTML = `${tag}<span>${it.title}</span><span class="year">${it.year||'–'}</span>`;
+        if(hasImg){
+          row.innerHTML = `<img class="thumb" src="${it.image}" loading="lazy" alt="">`+
+                          `<div class="title-wrap"><span class="t">${it.title}</span>${tag}</div>`+
+                          `<span class="year">${it.year||'–'}</span>`;
+        }else{
+          row.innerHTML = `${tag}<span>${it.title}</span><span class="year">${it.year||'–'}</span>`;
+        }
         container.appendChild(row);
       }
       const est = 1 + groups.get(y).length;
@@ -262,7 +292,6 @@
     const lines = (urls.value||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);
     const refs = lines.map(parseId).filter(Boolean);
     if(!refs.length){ alert('No valid AniList links detected.'); return; }
-    // fetch sequentially for simplicity
     const { out, errors } = await fetchAll(refs);
     state = out; render();
     if(errors.length) console.warn('Errors:', errors);
