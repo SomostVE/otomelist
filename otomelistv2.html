@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OtomeList · AniList Import</title>
+  <style>
+    :root{
+      --bg:#0f1220; --panel:#171a2b; --muted:#9aa3b2; --text:#e6e8ef; --brand:#7c5cff; --badge:#2a2f4a;
+      --ok:#19c37d; --warn:#ffb020;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+         background:radial-gradient(1200px 800px at 10% -10%, #1b1f36 0%, rgba(27,31,54,0) 60%),
+                    radial-gradient(1000px 700px at 110% 10%, #221b44 0%, rgba(34,27,68,0) 60%), var(--bg);
+         color:var(--text)}
+    header{position:sticky; top:0; z-index:5; backdrop-filter:saturate(140%) blur(8px);
+           background:linear-gradient(180deg, rgba(15,18,32,0.9) 0%, rgba(15,18,32,0.6) 100%);
+           border-bottom:1px solid #262b44}
+    .wrap{max-width:1100px; margin:0 auto; padding:16px}
+    .brand{display:flex; gap:10px; align-items:center}
+    .logo{width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg, var(--brand), #00e7ff)}
+    .title{font-weight:700; letter-spacing:0.3px}
+    .panel{background:var(--panel); border:1px solid #2a2f4a; border-radius:14px; padding:12px}
+    .row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+    .btn{appearance:none; border:none; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600;
+         background:linear-gradient(180deg, #2a2f4a, #222640); color:#e8eafb; box-shadow:0 6px 16px rgba(0,0,0,.25)}
+    .btn:hover{filter:brightness(1.08)}
+    .btn.ok{background:linear-gradient(180deg, #124a37, #0f3d2e); color:#b6ffe0}
+    textarea{width:100%; min-height:140px; background:#14182b; color:var(--text); border:1px solid #2a2f4a; border-radius:12px; padding:10px}
+    code{background:#121528; padding:2px 6px; border-radius:6px; border:1px solid #262b44}
+
+    .grid{display:grid; gap:16px; grid-template-columns: 1fr}
+    @media (min-width: 980px){ .grid{grid-template-columns: 1.1fr 1fr} }
+
+    /* list rendering (same style as main page) */
+    .list-grid{display:grid; grid-template-columns: 1fr; gap:16px}
+    @media (min-width: 980px){ .list-grid{grid-template-columns: 1fr 1fr;} }
+    .list{display:flex; flex-direction:column; gap:8px}
+    .year-head{margin:10px 0 4px; padding:6px 10px; color:var(--muted); font-weight:700; border-left:3px solid #2a2f4a; border-radius:6px}
+    .item{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; background:#151a2d; border:1px solid #2a2f4a; border-radius:12px; padding:10px 12px}
+    .tag{border:1px solid #32375a; border-radius:999px; padding:4px 8px; font-size:12px; color:#e6e8ef; background:#2a2f4a}
+    .year{color:var(--muted)}
+    .empty{opacity:.7; border:1px dashed #384067; padding:22px; border-radius:12px; text-align:center}
+    footer{max-width:1100px; margin:32px auto 40px; padding:0 16px; color:var(--muted); text-align:center}
+    label.inline{display:inline-flex; align-items:center; gap:8px}
+    .switch{display:inline-flex; gap:10px; background:#121528; border:1px solid #272c49; padding:6px; border-radius:999px}
+    .switch button{border:none; background:transparent; color:#c8cfe0; padding:6px 10px; border-radius:999px; cursor:pointer}
+    .switch button.active{background:#2a2f4a; color:#fff}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="row" style="justify-content:space-between">
+        <div class="brand"><div class="logo"></div><div class="title">OtomeList · AniList Import</div></div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <div class="grid">
+        <div class="panel">
+          <div class="row" style="justify-content:space-between; margin-bottom:8px">
+            <strong>Paste AniList links</strong>
+            <div class="row" style="gap:6px">
+              <button class="btn" id="btn-eg">Example</button>
+              <button class="btn ok" id="btn-fetch">Fetch</button>
+            </div>
+          </div>
+          <p style="opacity:.85">One URL per line. Supports <code>https://anilist.co/anime/ID</code> or <code>https://anilist.co/manga/ID</code>.</p>
+          <textarea id="urls" placeholder="https://anilist.co/anime/5114\nhttps://anilist.co/manga/30002"></textarea>
+
+          <div style="margin-top:12px; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+            <label class="inline">Tag mode:</label>
+            <div class="switch" role="tablist" aria-label="Tag mode">
+              <button id="mode-auto" class="active" aria-pressed="true">Auto (Anime/Manga)</button>
+              <button id="mode-none" aria-pressed="false">None (title + year)</button>
+            </div>
+          </div>
+
+          <div style="margin-top:12px" class="row">
+            <button class="btn" id="btn-export">Export PNG</button>
+            <button class="btn" id="btn-copy">Copy as text</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="row" style="justify-content:space-between; margin-bottom:8px">
+            <strong>Preview</strong>
+            <div class="row" style="gap:6px">
+              <select id="sortSel" class="btn" style="padding:8px 10px">
+                <option value="yearDesc">Year ↓</option>
+                <option value="yearAsc">Year ↑</option>
+                <option value="titleAsc">Title A→Z</option>
+                <option value="titleDesc">Title Z→A</option>
+              </select>
+            </div>
+          </div>
+          <div class="list-grid">
+            <section class="list" id="col1"></section>
+            <section class="list" id="col2"></section>
+          </div>
+          <div id="empty" class="empty" style="display:none; margin-top:10px">No results yet. Paste links and click Fetch.</div>
+        </div>
+      </div>
+
+      <div id="exportArea" style="display:none; margin-top:16px">
+        <div class="panel">
+          <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px">
+            <strong>Export preview</strong>
+            <a id="dl" class="btn" download="anilist-export.png">Download</a>
+          </div>
+          <img id="img" alt="PNG preview" style="max-width:100%; border:1px solid #2a2f4a; border-radius:10px"/>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>@ <span id="year"></span> OtomeList</footer>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  const on = (n,e,f)=> n && n.addEventListener(e,f);
+  const html=(n,s)=>{ if(n) n.innerHTML=s; };
+
+  // UI refs
+  const urls = $('#urls');
+  const btnEg = $('#btn-eg');
+  const btnFetch = $('#btn-fetch');
+  const btnExport = $('#btn-export');
+  const btnCopy = $('#btn-copy');
+  const modeAuto = $('#mode-auto');
+  const modeNone = $('#mode-none');
+  const sortSel = $('#sortSel');
+  const col1 = $('#col1');
+  const col2 = $('#col2');
+  const empty = $('#empty');
+  const exportArea = $('#exportArea');
+  const img = $('#img');
+  const dl = $('#dl');
+  $('#year').textContent = new Date().getFullYear();
+
+  let TAG_MODE = 'auto'; // 'auto' | 'none'
+  on(modeAuto,'click', ()=>{ TAG_MODE='auto'; modeAuto.classList.add('active'); modeNone.classList.remove('active'); render(); });
+  on(modeNone,'click', ()=>{ TAG_MODE='none'; modeNone.classList.add('active'); modeAuto.classList.remove('active'); render(); });
+
+  const API = 'https://graphql.anilist.co';
+  const query = `query ($id: Int){ Media(id:$id){ id type format title{romaji english native} seasonYear startDate{year} } }`;
+
+  function parseId(u){
+    try{ const url=new URL(u.trim()); const parts=url.pathname.split('/').filter(Boolean); const type=parts[0]; const id=parseInt(parts[1],10); if(!id||!(type==='anime'||type==='manga')) return null; return {id, kind:type}; }catch{ return null; }
+  }
+
+  async function fetchOne(item){
+    const body = JSON.stringify({ query, variables:{ id:item.id } });
+    const res = await fetch(API, { method:'POST', headers:{ 'Content-Type':'application/json', 'Accept':'application/json' }, body });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const json = await res.json();
+    const m = json.data && json.data.Media; if(!m) throw new Error('Invalid payload');
+    const year = m.seasonYear || (m.startDate && m.startDate.year) || null;
+    const title = m.title.romaji || m.title.english || m.title.native || 'Unknown';
+    const type = (TAG_MODE==='auto') ? (m.type==='ANIME'?'Anime':'Manga') : null;
+    return { title, year, type };
+  }
+
+  async function fetchAll(list){
+    const out=[]; const errors=[];
+    for(const it of list){
+      try{ out.push(await fetchOne(it)); }catch(e){ errors.push({it, error:String(e)}); }
+      await new Promise(r=>setTimeout(r,80)); // polite throttle
+    }
+    return { out, errors };
+  }
+
+  let state = [];
+  function render(){
+    if(!state.length){ empty.style.display='block'; html(col1,''); html(col2,''); return; }
+    empty.style.display='none'; html(col1,''); html(col2,'');
+
+    const s = sortSel.value||'yearDesc';
+    const items = state.slice().sort((a,b)=>{
+      if(s==='yearDesc') return (b.year||0)-(a.year||0) || a.title.localeCompare(b.title);
+      if(s==='yearAsc')  return (a.year||0)-(b.year||0) || a.title.localeCompare(b.title);
+      if(s==='titleAsc') return a.title.localeCompare(b.title) || ((b.year||0)-(a.year||0));
+      if(s==='titleDesc')return b.title.localeCompare(a.title) || ((b.year||0)-(a.year||0));
+      return 0;
+    });
+
+    // group by year
+    const groups = new Map();
+    for(const it of items){ const y=it.year||'–'; if(!groups.has(y)) groups.set(y,[]); groups.get(y).push(it); }
+    const years = Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? ((a==='–')-(b==='–')||a-b) : ((b==='–')-(a==='–')||b-a));
+
+    let h1=0,h2=0;
+    for(const y of years){
+      const container=document.createElement('div');
+      const head=document.createElement('div'); head.className='year-head'; head.textContent = (y==='–'?'Unknown':y)+' —'; container.appendChild(head);
+      for(const it of groups.get(y)){
+        const row=document.createElement('div'); row.className='item';
+        const tag = (TAG_MODE==='auto' && it.type) ? `<span class="tag">${it.type}</span>` : '';
+        row.innerHTML = `${tag}<span>${it.title}</span><span class="year">${it.year||'–'}</span>`;
+        container.appendChild(row);
+      }
+      const est = 1 + groups.get(y).length;
+      if(h1<=h2){ col1.appendChild(container); h1+=est; } else { col2.appendChild(container); h2+=est; }
+    }
+  }
+
+  function toText(){
+    return state.map(it=>{
+      const core = `${it.title} (${it.year||''})`.trim();
+      if(TAG_MODE==='auto' && it.type){ return `[${it.type}] ${core}`; }
+      return core;
+    }).join('\n');
+  }
+
+  function exportPNG(){
+    if(!state.length){ alert('Nothing to export'); return; }
+    const DPR=Math.max(1, window.devicePixelRatio||1);
+    const pad=24,rowH=42,headH=30,width=1000; const tagPadX=10;
+    // group
+    const s = sortSel.value||'yearDesc';
+    const groups=new Map(); for(const it of state){ const y=it.year||'–'; if(!groups.has(y)) groups.set(y,[]); groups.get(y).push(it);} 
+    const years=Array.from(groups.keys()).sort((a,b)=> s==='yearAsc' ? ((a==='–')-(b==='–')||a-b) : ((b==='–')-(a==='–')||b-a));
+    const totalRows = years.reduce((acc,y)=> acc + 1 + groups.get(y).length, 0);
+    const height = pad*2 + totalRows*rowH + years.length*(headH-rowH);
+    const canvas=document.createElement('canvas'); const ctx=canvas.getContext('2d');
+    canvas.width=width*DPR; canvas.height=height*DPR; canvas.style.width=width+'px'; canvas.style.height=height+'px'; ctx.setTransform(DPR,0,0,DPR,0,0);
+
+    ctx.fillStyle='#0f1220'; ctx.fillRect(0,0,width,height);
+    ctx.fillStyle='#e6e8ef'; ctx.font='600 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial'; ctx.fillText('OtomeList · AniList Import', pad, pad-6+18);
+    let y=pad+28; ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+
+    for(const yr of years){
+      ctx.fillStyle='#9aa3b2'; ctx.font='700 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial'; ctx.fillText(String(yr==='–'?'Unknown':yr)+' —', pad, y); y+=headH; ctx.font='14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial';
+      for(const it of groups.get(yr)){
+        if(TAG_MODE==='auto' && it.type){
+          const tagText=it.type; const tw=ctx.measureText(tagText).width; const tagW=Math.ceil(tw)+tagPadX*2; const tagH=24; const r=12; const x=pad, yy=y-18;
+          ctx.beginPath(); ctx.moveTo(x+r,yy); ctx.arcTo(x+tagW,yy,x+tagW,yy+tagH,r); ctx.arcTo(x+tagW,yy+tagH,x,yy+tagH,r); ctx.arcTo(x,yy+tagH,x,yy,r); ctx.arcTo(x,yy,x+tagW,yy,r); ctx.closePath();
+          ctx.fillStyle='#2a2f4a'; ctx.fill(); ctx.lineWidth=1; ctx.strokeStyle='#32375a'; ctx.stroke();
+          ctx.fillStyle='#e6e8ef'; ctx.fillText(tagText, pad+tagPadX, y-18+16);
+          ctx.fillStyle='#e6e8ef'; ctx.fillText(it.title, pad+tagW+12, y-18+16);
+        } else {
+          ctx.fillStyle='#e6e8ef'; ctx.fillText(it.title, pad, y-18+16);
+        }
+        const year=String(it.year||''); const yearW=ctx.measureText(year).width; ctx.fillStyle='#9aa3b2'; ctx.fillText(year, width-pad-yearW, y-18+16);
+        y+=rowH;
+      }
+    }
+    const url=canvas.toDataURL('image/png'); img.src=url; dl.href=url; dl.download=`anilist-export-${new Date().toISOString().slice(0,10)}.png`; exportArea.style.display='block';
+  }
+
+  on(btnEg,'click', ()=>{
+    urls.value = 'https://anilist.co/anime/5114/\nhttps://anilist.co/anime/15315/\nhttps://anilist.co/manga/30002/';
+  });
+
+  on(btnFetch,'click', async()=>{
+    const lines = (urls.value||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);
+    const refs = lines.map(parseId).filter(Boolean);
+    if(!refs.length){ alert('No valid AniList links detected.'); return; }
+    // fetch sequentially for simplicity
+    const { out, errors } = await fetchAll(refs);
+    state = out; render();
+    if(errors.length) console.warn('Errors:', errors);
+  });
+
+  on(btnExport,'click', exportPNG);
+  on(btnCopy,'click', ()=>{ const text=toText(); navigator.clipboard.writeText(text).then(()=>alert('Copied!')).catch(()=>alert('Copy failed.')); });
+  on(sortSel,'change', render);
+})();
+</script>
+</body>
+</html>
